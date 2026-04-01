@@ -38,6 +38,12 @@ export default function MainMenu() {
       description: "Learn about the use of the app.",
       icon: "⚙️",
     },
+    { 
+      name: "About", 
+      path: "/about", 
+      description: "App Info.",
+      icon: "❔" 
+    },
   ];
 
   return (
