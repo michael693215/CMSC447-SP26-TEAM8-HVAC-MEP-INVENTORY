@@ -21,6 +21,12 @@ export default function MainMenu() {
       description: "Manage client contact info and history.",
       icon: "👥" 
     },
+    { 
+      name: "About", 
+      path: "/about", 
+      description: "App Info.",
+      icon: "❔" 
+    },
   ];
 
   return (
