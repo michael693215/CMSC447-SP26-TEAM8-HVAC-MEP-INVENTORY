@@ -27,7 +27,7 @@ export default function ContactsPage() {
 
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-3xl font-bold text-black uppercase tracking-tight">Contact List</h1>
-          <button className="bg-blue-200 text-black px-4 py-2 rounded-md hover:bg-blue-800 transition font-bold">
+          <button className="btn-accent px-4 py-2">
             Add New Contact
           </button>
         </div>
@@ -41,12 +41,12 @@ export default function ContactsPage() {
             <input 
               type="text"
               placeholder="Search by name or company..."
-              className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-gray-50 text-black placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-900 focus:border-blue-900 sm:text-sm"
+              className="input-themed block w-full pl-10 pr-3 py-2 leading-5 text-black placeholder-gray-500 sm:text-sm"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
-          <button className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 text-sm font-medium">
+          <button className="btn-secondary">
             Filters
           </button>
         </div>
@@ -54,7 +54,7 @@ export default function ContactsPage() {
         {/* Table Section */}
         <div className="bg-white shadow-md rounded-b-lg overflow-hidden border border-gray-200">
           <table className="w-full text-left border-collapse">
-            <thead className="bg-blue-200 text-black uppercase text-xs tracking-wider">
+            <thead className="table-header-accent">
               <tr>
                 <th className="p-4 border-b">Contact Name</th>
                 <th className="p-4 border-b">Company / Org</th>
