@@ -25,28 +25,28 @@ export default function LoginPage() {
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100">
       <div className="p-8 bg-white shadow-md rounded-lg">
-        <h1 className="text-2xl font-bold mb-6 text-center">HVAC Inventory Login</h1>
+        <h1 className="text-2xl font-bold mb-6 text-center">Inventory Management</h1>
         
         <form onSubmit={handleSubmit} className="flex flex-col gap-4 w-64">
-          <input 
-            type="text" 
-            placeholder="Username" 
-            className="border p-2 rounded focus:outline-blue-500 text-black"
+          <input
+            type="text"
+            placeholder="Username"
+            className="input-themed p-2 text-black w-full"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             required
           />
-          <input 
-            type="password" 
-            placeholder="Password" 
-            className="border p-2 rounded focus:outline-blue-500 text-black"
+          <input
+            type="password"
+            placeholder="Password"
+            className="input-themed p-2 text-black w-full"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
           />
-          <button 
-            type="submit" 
-            className="bg-black text-white p-2 rounded hover:bg-gray-800 transition"
+          <button
+            type="submit"
+            className="btn-primary w-full"
           >
             Sign In
           </button>
