@@ -1,57 +1,64 @@
 "use client"; 
 
-import React, { useState } from 'react';
-// 1. Import the router from next/navigation
-import { useRouter } from 'next/navigation'; 
+import React, { useActionState } from 'react';
+import { signInWithEmail, verifyOTP, signUpState } from './actions'
+import { useRouter } from 'next/navigation'
 
 export default function LoginPage() {
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  
-  // 2. Initialize the router
   const router = useRouter();
+  const [signInState, signInAction] = useActionState<signUpState, FormData>(signInWithEmail, { status: 'initial' });
+  const [token, verifyAction] = useActionState<signUpState, FormData>(verifyOTP, { status: 'initial' });
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    // In a real app, you'd verify the password here.
-    // For now, we just simulate a successful login:
-    console.log("Logging in with:", { username, password });
-
-    // 3. Redirect to the root page (Main Menu)
-    router.push('/'); 
-  };
-
-  return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100">
-      <div className="p-8 bg-white shadow-md rounded-lg">
-        <h1 className="text-2xl font-bold mb-6 text-center">Inventory Management</h1>
-        
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4 w-64">
-          <input
-            type="text"
-            placeholder="Username"
-            className="input-themed p-2 text-black w-full"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            required
-          />
-          <input
-            type="password"
-            placeholder="Password"
-            className="input-themed p-2 text-black w-full"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-          />
-          <button
-            type="submit"
-            className="btn-primary w-full"
-          >
-            Sign In
-          </button>
-        </form>
+  // user enters credentials first 
+  {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100">
+        <div className="p-8 bg-white shadow-md rounded-lg">
+          { signInState?.status == 'initial' && 
+          (
+            <form action={ signInAction } className="flex flex-col gap-4 w-64">
+              <h2>Login</h2>
+              <input 
+                type="email" 
+                name="email"
+                placeholder="YourEmail@coolsys.com" 
+                className="text-[rgb(80,80,80)]"
+                required
+              />
+              {signInState?.error && <p style={{ color : "red" }}>{ signInState.error }</p>}
+              <button 
+                type="submit" 
+                className="bg-black text-white p-2 rounded hover:bg-gray-800 transition"
+              >
+                Sign In
+              </button>
+            </form>
+          )}
+          
+          { signInState?.status == 'otp' && 
+          (
+            <form action={ verifyAction } className="flex flex-col gap-4 w-64">
+              <h2>Logging in as: { signInState.email } </h2>
+              <input 
+                type="hidden"
+                name="email"
+                value={signInState.email}
+              />
+              <input
+                type="text"
+                inputMode="numeric"
+                name="token"
+                placeholder="123456"
+                className="text-[rgb(80,80,80)]"
+                required
+              />
+              {token?.status != 'success' && token?.error && <p style={{ color : "red" }}>{ token.error }</p>}
+              <button type="submit" className="bg-black text-white p-2 rounded hover:bg-gray-800 transition">
+                Submit
+              </button>
+            </form>
+          )}
+        </div>
       </div>
-    </div>
-  );
-}
+    )};
+  }
