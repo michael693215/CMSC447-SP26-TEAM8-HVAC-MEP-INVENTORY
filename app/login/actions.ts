@@ -9,6 +9,14 @@ export type signUpState =
 | { status: 'new_user', email: string, error?: string }
 | { status: 'success', email: string, error?: string }
 
+export async function checkAuth()
+{
+    const supabase = await createClient();
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user) return true;
+    return false;
+}
+
 export async function signInWithEmail(prevState : signUpState, formData : FormData) : Promise<signUpState>
 {
     const supabase = await createClient();

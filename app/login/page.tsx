@@ -12,7 +12,8 @@ export default function LoginPage() {
   const [nameError, setEmployeeAction] = useActionState<signUpState, FormData>(setEmployee, { status: 'initial' });
 
   useEffect(() => { 
-    if (token?.status == 'success' || nameError?.status == 'success')
+    // login sequence completed
+    if (token?.status == 'success' || nameError?.status == 'success') 
     {
       router.replace('/');  
     }
