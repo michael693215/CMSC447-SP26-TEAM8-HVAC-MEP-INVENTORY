@@ -42,7 +42,7 @@ export default function MainMenu() {
   ];
 
   return (
-    <div className="flex flex-col items-center justify-start min-h-screen p-6 md:p-12">
+    <div className="flex flex-col items-center justify-start min-h-screen p-6 md:p-12 bg-gray-100">
       {/* Header */}
       <header className="w-full max-w-5xl flex justify-between items-center mb-10">
         <h1 className="text-4xl font-black text-black">Inventory Management System</h1>
