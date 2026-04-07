@@ -69,19 +69,19 @@ export default function ProductDetailPage() {
         {/* Stats row */}
         <div className="grid grid-cols-3 gap-4 mb-8">
           <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm text-center">
-            <p className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">Current Stock</p>
+            <p className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">Total</p>
             <p className="text-5xl font-black">{product.qty}</p>
             <p className="text-xs text-gray-500 mt-1">units</p>
           </div>
           <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm text-center">
-            <p className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">Total Received</p>
+            <p className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">Current Stock</p>
             <p className="text-5xl font-black text-green-700">{totalReceived}</p>
             <p className="text-xs text-gray-500 mt-1">units delivered</p>
           </div>
           <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm text-center">
             <p className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">Incoming</p>
             <p className="text-5xl font-black text-yellow-600">{totalPending}</p>
-            <p className="text-xs text-gray-500 mt-1">units pending / in transit</p>
+            <p className="text-xs text-gray-500 mt-1">units pending</p>
           </div>
         </div>
 
@@ -89,7 +89,7 @@ export default function ProductDetailPage() {
         <div className="mb-4 flex justify-between items-center">
           <h2 className="text-xl font-bold uppercase tracking-tight">Associated Deliveries</h2>
           <Link href="/purchase-order" className="btn-accent px-4 py-2 text-sm">
-            + New Purchase Order
+            View Purchase Order
           </Link>
         </div>
 
