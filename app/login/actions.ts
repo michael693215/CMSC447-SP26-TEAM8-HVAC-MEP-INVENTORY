@@ -7,6 +7,7 @@ export type signUpState =
 | { status: 'initial', error?: string }
 | { status: 'otp', email: string, error?: string } 
 | { status: 'new_user', email: string, error?: string }
+| { status: 'success', email: string, error?: string }
 
 export async function signInWithEmail(prevState : signUpState, formData : FormData) : Promise<signUpState>
 {
@@ -44,7 +45,7 @@ export async function verifyOTP(prevState : signUpState, formData : FormData) : 
         .single();
     if (!employee?.first_name){ return { status: 'new_user', email: email }; }
     
-    redirect('/');   
+    return { status: 'success', email: email };
 }
 
 export async function setEmployee(prevState : signUpState, formData : FormData) : Promise<signUpState>
@@ -67,5 +68,5 @@ export async function setEmployee(prevState : signUpState, formData : FormData) 
         .single();
     
     if (error) { return { status: 'new_user', email: email, error: error.message }; }
-    redirect('/');
+    return { status: 'success', email: email };
 }

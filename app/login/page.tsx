@@ -1,6 +1,7 @@
 "use client"; 
 
-import React, { useActionState } from 'react';
+import React, { useActionState, useEffect } from 'react';
+import { createClient } from '@/lib/supabase/client'
 import { signInWithEmail, verifyOTP, signUpState, setEmployee } from './actions'
 import { useRouter } from 'next/navigation'
 
@@ -10,7 +11,13 @@ export default function LoginPage() {
   const [token, verifyAction] = useActionState<signUpState, FormData>(verifyOTP, { status: 'initial' });
   const [nameError, setEmployeeAction] = useActionState<signUpState, FormData>(setEmployee, { status: 'initial' });
 
-  // user enters credentials first 
+  useEffect(() => { 
+    if (token?.status == 'success' || nameError?.status == 'success')
+    {
+      router.replace('/');  
+    }
+  });
+
   {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100">
@@ -18,7 +25,7 @@ export default function LoginPage() {
           { signInState?.status == 'initial' && 
           (
             <form action={ signInAction } className="flex flex-col gap-4 w-64">
-              <h2>Login</h2>
+              <h1 className="text-2xl font-bold mb-6 text-center">Login</h1>
               <input 
                 type="email" 
                 name="email"
@@ -29,7 +36,7 @@ export default function LoginPage() {
               {signInState?.error && <p style={{ color : "red" }}>{ signInState.error }</p>}
               <button 
                 type="submit" 
-                className="bg-black text-white p-2 rounded hover:bg-gray-800 transition"
+                className="bg-blue-200 text-black p-2 rounded hover:bg-blue-300 transition"
               >
                 Sign In
               </button>
@@ -38,7 +45,7 @@ export default function LoginPage() {
           { signInState?.status == 'otp' && token?.status != 'new_user' && 
           (
             <form action={ verifyAction } className="flex flex-col gap-4 w-64">
-              <h2>Logging in as: { signInState.email } </h2>
+              <h2 className="text-2xl font-bold mb-6 text-center">Logging in as: { signInState.email } </h2>
               <input 
                 type="hidden"
                 name="email"
@@ -53,7 +60,7 @@ export default function LoginPage() {
                 required
               />
               {token?.error && <p style={{ color : "red" }}>{ token.error }</p>}
-              <button type="submit" className="bg-black text-white p-2 rounded hover:bg-gray-800 transition">
+              <button type="submit" className="bg-blue-200 text-black p-2 rounded hover:bg-blue-300 transition">
                 Submit
               </button>
             </form>
@@ -61,7 +68,7 @@ export default function LoginPage() {
           { token?.status == 'new_user' &&
           (
             <form action={ setEmployeeAction } className="flex flex-col gap-4 w-64">
-              <h2>New User</h2>
+              <h2 className="text-2xl font-bold mb-6 text-center">New User</h2>
               <input 
                 type="hidden"
                 name="email"
@@ -83,7 +90,7 @@ export default function LoginPage() {
                 className="text-[rgb(80,80,80)]"
               />
               { nameError?.error && <p style={{ color : "red" }}>{ nameError.error }</p>}
-              <button type="submit" className="bg-black text-white p-2 rounded hover:bg-gray-800 transition">
+              <button type="submit" className="bg-blue-200 text-black p-2 rounded hover:bg-blue-300 transition">
                 Submit
               </button>
             </form>
