@@ -4,14 +4,57 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { products } from "../lib/data";
 
+type SortKey = "name" | "category" | "qty" | "status" | "deliveries";
+type SortDir = "asc" | "desc";
+
+const STATUS_ORDER = { "Out of Stock": 0, "Low Stock": 1, "In Stock": 2 };
+
+function SortArrow({ active, dir }: { active: boolean; dir: SortDir }) {
+  if (!active) return <span className="ml-1 text-gray-400 text-xs">↕</span>;
+  return <span className="ml-1 text-xs">{dir === "asc" ? "↑" : "↓"}</span>;
+}
+
 export default function InventoryPage() {
   const [searchTerm, setSearchTerm] = useState("");
+  const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: "name", dir: "asc" });
 
-  const filteredProducts = products.filter(
+  function toggleSort(key: SortKey) {
+    setSort((prev) =>
+      prev.key === key ? { key, dir: prev.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" }
+    );
+  }
+
+  const filtered = products.filter(
     (item) =>
       item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       item.description.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const sorted = [...filtered].sort((a, b) => {
+    let cmp = 0;
+    if (sort.key === "qty") {
+      cmp = a.qty - b.qty;
+    } else if (sort.key === "deliveries") {
+      cmp = a.deliveryIds.length - b.deliveryIds.length;
+    } else if (sort.key === "status") {
+      cmp = STATUS_ORDER[a.status] - STATUS_ORDER[b.status];
+    } else {
+      cmp = String(a[sort.key]).localeCompare(String(b[sort.key]));
+    }
+    return sort.dir === "asc" ? cmp : -cmp;
+  });
+
+  function Th({ col, label, center }: { col: SortKey; label: string; center?: boolean }) {
+    return (
+      <th
+        className={`p-4 border-b cursor-pointer select-none hover:bg-black/5 whitespace-nowrap ${center ? "text-center" : ""}`}
+        onClick={() => toggleSort(col)}
+      >
+        {label}
+        <SortArrow active={sort.key === col} dir={sort.dir} />
+      </th>
+    );
+  }
 
   return (
     <div className="min-h-screen p-8 text-black">
@@ -46,26 +89,23 @@ export default function InventoryPage() {
           <table className="w-full text-left border-collapse">
             <thead className="table-header-accent">
               <tr>
-                <th className="p-4 border-b">Product</th>
+                <Th col="name" label="Product" />
                 <th className="p-4 border-b">Description</th>
-                <th className="p-4 border-b">Category</th>
-                <th className="p-4 border-b text-center">Quantity</th>
-                <th className="p-4 border-b">Status</th>
-                <th className="p-4 border-b text-center">Deliveries</th>
+                <Th col="category" label="Category" />
+                <Th col="qty" label="Quantity" center />
+                <Th col="status" label="Status" />
+                <Th col="deliveries" label="Deliveries" center />
               </tr>
             </thead>
             <tbody>
-              {filteredProducts.length > 0 ? (
-                filteredProducts.map((item) => (
+              {sorted.length > 0 ? (
+                sorted.map((item) => (
                   <tr
                     key={item.id}
                     className="hover:bg-blue-50 transition-colors border-b border-gray-100 cursor-pointer"
                   >
                     <td className="p-4 font-bold">
-                      <Link
-                        href={`/inventory/${item.id}`}
-                        className="hover:underline text-black"
-                      >
+                      <Link href={`/inventory/${item.id}`} className="hover:underline text-black">
                         {item.name}
                       </Link>
                     </td>

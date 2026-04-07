@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { deliveries, type DeliveryStatus } from "../lib/data";
+import { deliveries as seedDeliveries, type Delivery, type DeliveryStatus } from "../lib/data";
+import { getAllDeliveries } from "../lib/store";
 
 const STATUS_STYLES: Record<DeliveryStatus, string> = {
   Delivered: "bg-green-100 text-green-700",
@@ -10,9 +11,34 @@ const STATUS_STYLES: Record<DeliveryStatus, string> = {
   Pending: "bg-yellow-100 text-yellow-700",
 };
 
+type SortKey = "id" | "date" | "productName" | "qty" | "supplier" | "po" | "signedBy" | "status";
+type SortDir = "asc" | "desc";
+
+function parseDate(str: string): number {
+  const d = new Date(str);
+  return isNaN(d.getTime()) ? 0 : d.getTime();
+}
+
+function SortArrow({ active, dir }: { active: boolean; dir: SortDir }) {
+  if (!active) return <span className="ml-1 text-gray-400 text-xs">↕</span>;
+  return <span className="ml-1 text-xs">{dir === "asc" ? "↑" : "↓"}</span>;
+}
+
 export default function DeliveryHistoryPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<DeliveryStatus | "All">("All");
+  const [deliveries, setDeliveries] = useState<Delivery[]>(seedDeliveries);
+  const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: "date", dir: "desc" });
+
+  useEffect(() => {
+    setDeliveries(getAllDeliveries());
+  }, []);
+
+  function toggleSort(key: SortKey) {
+    setSort((prev) =>
+      prev.key === key ? { key, dir: prev.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" }
+    );
+  }
 
   const filtered = deliveries.filter((d) => {
     const matchesSearch =
@@ -23,6 +49,30 @@ export default function DeliveryHistoryPage() {
     const matchesStatus = statusFilter === "All" || d.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
+
+  const sorted = [...filtered].sort((a, b) => {
+    let cmp = 0;
+    if (sort.key === "qty") {
+      cmp = a.qty - b.qty;
+    } else if (sort.key === "date") {
+      cmp = parseDate(a.date) - parseDate(b.date);
+    } else {
+      cmp = String(a[sort.key]).localeCompare(String(b[sort.key]));
+    }
+    return sort.dir === "asc" ? cmp : -cmp;
+  });
+
+  function Th({ col, label, center }: { col: SortKey; label: string; center?: boolean }) {
+    return (
+      <th
+        className={`p-4 border-b cursor-pointer select-none hover:bg-black/5 whitespace-nowrap ${center ? "text-center" : ""}`}
+        onClick={() => toggleSort(col)}
+      >
+        {label}
+        <SortArrow active={sort.key === col} dir={sort.dir} />
+      </th>
+    );
+  }
 
   return (
     <div className="min-h-screen p-8 text-black">
@@ -69,19 +119,19 @@ export default function DeliveryHistoryPage() {
           <table className="w-full text-left border-collapse">
             <thead className="table-header-accent">
               <tr>
-                <th className="p-4 border-b">Delivery ID</th>
-                <th className="p-4 border-b">Date</th>
-                <th className="p-4 border-b">Product</th>
-                <th className="p-4 border-b text-center">Qty</th>
-                <th className="p-4 border-b">Supplier</th>
-                <th className="p-4 border-b">PO #</th>
-                <th className="p-4 border-b">Signed By</th>
-                <th className="p-4 border-b text-center">Status</th>
+                <Th col="id" label="Delivery ID" />
+                <Th col="date" label="Date" />
+                <Th col="productName" label="Product" />
+                <Th col="qty" label="Qty" center />
+                <Th col="supplier" label="Supplier" />
+                <Th col="po" label="PO #" />
+                <Th col="signedBy" label="Signed By" />
+                <Th col="status" label="Status" center />
               </tr>
             </thead>
             <tbody>
-              {filtered.length > 0 ? (
-                filtered.map((d) => (
+              {sorted.length > 0 ? (
+                sorted.map((d) => (
                   <tr key={d.id} className="hover:bg-blue-50 transition-colors border-b border-gray-100">
                     <td className="p-4 font-mono font-bold text-sm">{d.id}</td>
                     <td className="p-4 text-sm">{d.date}</td>
