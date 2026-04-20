@@ -37,7 +37,8 @@ export default function MainMenu() {
       path: "/about",
       description: "Learn about the use of the app.",
       icon: "⚙️",
-    },
+    }
+
   ];
 
   return (

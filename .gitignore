@@ -16,3 +16,4 @@ yarn-error.log*
 # Local env files
 .env*.local
 node_modules
+next-env.d.ts
