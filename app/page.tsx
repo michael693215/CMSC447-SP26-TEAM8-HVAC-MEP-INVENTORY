@@ -9,8 +9,8 @@ export default function MainMenu() {
       icon: "📦",
     },
     {
-      name: "Add Delivery",
-      path: "/adddelivery",
+      name: "Log Delivery",
+      path: "/log-delivery",
       description: "Log a new incoming delivery.",
       icon: "📋",
     },
