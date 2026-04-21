@@ -8,22 +8,22 @@ export async function POST(request: Request) {
     // 1. Clean the Base64 string
     const base64Data = imageBase64.split(',')[1];
 
-    // 2. Format the payload according to Docupipe's API docs
+    // 2. Format the payload EXACTLY according to Docupipe's Python docs
     const payload = {
       document: {
-        slug: "1anz6Ou0", 
         file: {
-          data: base64Data,
-          name: "packing_slip.jpg" 
+          contents: base64Data,   // Changed from 'data'
+          filename: "packing_slip" // Changed from 'name', removed '.jpg' extension
         }
-      }
+      },
+      dataset: "1anz6Ou0" // Changed from 'slug' and moved to the root level
     };
 
     // 3. Send the image to Docupipe
     const docupipeResponse = await fetch("https://app.docupipe.ai/document", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${process.env.DOCUPIPE_API_KEY}`,
+        "X-API-Key": process.env.DOCUPIPE_API_KEY as string, // Changed to X-API-Key
         "Content-Type": "application/json"
       },
       body: JSON.stringify(payload)
@@ -35,7 +35,9 @@ export async function POST(request: Request) {
       throw new Error("Docupipe processing failed");
     }
 
+    // Docupipe returns job_id and doc_id first, processing might be async
     const extractedData = await docupipeResponse.json();
+    console.log("Docupipe Job ID:", extractedData.jobId);
 
     // 4. Return the structured data back to your frontend
     return NextResponse.json({ success: true, data: extractedData });
