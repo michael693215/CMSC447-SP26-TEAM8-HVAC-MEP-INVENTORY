@@ -16,7 +16,7 @@ export async function POST(request: Request) {
           filename: "packing_slip" // Changed from 'name', removed '.jpg' extension
         }
       },
-      dataset: "1anz6Ou0" // Changed from 'slug' and moved to the root level
+      dataset: process.env.DOCUPIPE_SCHEMA_ID
     };
 
     // 3. Send the image to Docupipe
