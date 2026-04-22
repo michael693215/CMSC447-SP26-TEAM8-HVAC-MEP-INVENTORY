@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { signOut } from './actions'
 
 export default function MainMenu() {
   const features = [
@@ -46,9 +47,9 @@ export default function MainMenu() {
       {/* Header */}
       <header className="w-full max-w-5xl flex justify-between items-center mb-10">
         <h1 className="text-4xl font-black text-black">Inventory Management System</h1>
-        <Link href="/login" className="btn-primary">
+        <button onClick={ signOut } className="btn-primary">
           Sign Out
-        </Link>
+        </button>
       </header>
 
       {/* 3-column grid */}
