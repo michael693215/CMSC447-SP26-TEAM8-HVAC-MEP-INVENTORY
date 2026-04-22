@@ -8,7 +8,7 @@ export async function POST(request: Request) {
     // 1. Clean the Base64 string
     const base64Data = imageBase64.split(',')[1];
 
-    // 2. Format the payload EXACTLY according to Docupipe's Python docs
+    // 2. Format the payload to trigger a DocuPipe Workflow
     const payload = {
       document: {
         file: {
@@ -16,7 +16,8 @@ export async function POST(request: Request) {
           filename: "packing_slip" // Changed from 'name', removed '.jpg' extension
         }
       },
-      dataset: process.env.DOCUPIPE_SCHEMA_ID
+      // This tells DocuPipe to instantly route the upload to your schema
+      workflowId: process.env.DOCUPIPE_WORKFLOW_ID
     };
 
     // 3. Send the image to Docupipe
