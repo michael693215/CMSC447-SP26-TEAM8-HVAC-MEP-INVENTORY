@@ -20,8 +20,20 @@ function parseDate(str: string): number {
 }
 
 function SortArrow({ active, dir }: { active: boolean; dir: SortDir }) {
-  if (!active) return <span className="ml-1 text-gray-400 text-xs">↕</span>;
-  return <span className="ml-1 text-xs">{dir === "asc" ? "↑" : "↓"}</span>;
+  if (!active) return (
+    <svg xmlns="http://www.w3.org/2000/svg" className="inline w-3 h-3 ml-1 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
+      <path d="M5 12l5-5 5 5H5z" />
+    </svg>
+  );
+  return dir === "asc" ? (
+    <svg xmlns="http://www.w3.org/2000/svg" className="inline w-3 h-3 ml-1" viewBox="0 0 20 20" fill="currentColor">
+      <path d="M5 12l5-5 5 5H5z" />
+    </svg>
+  ) : (
+    <svg xmlns="http://www.w3.org/2000/svg" className="inline w-3 h-3 ml-1" viewBox="0 0 20 20" fill="currentColor">
+      <path d="M15 8l-5 5-5-5h10z" />
+    </svg>
+  );
 }
 
 export default function DeliveryHistoryPage() {
@@ -52,20 +64,16 @@ export default function DeliveryHistoryPage() {
 
   const sorted = [...filtered].sort((a, b) => {
     let cmp = 0;
-    if (sort.key === "qty") {
-      cmp = a.qty - b.qty;
-    } else if (sort.key === "date") {
-      cmp = parseDate(a.date) - parseDate(b.date);
-    } else {
-      cmp = String(a[sort.key]).localeCompare(String(b[sort.key]));
-    }
+    if (sort.key === "qty") cmp = a.qty - b.qty;
+    else if (sort.key === "date") cmp = parseDate(a.date) - parseDate(b.date);
+    else cmp = String(a[sort.key]).localeCompare(String(b[sort.key]));
     return sort.dir === "asc" ? cmp : -cmp;
   });
 
-  function Th({ col, label, center }: { col: SortKey; label: string; center?: boolean }) {
+  function Th({ col, label, center, sticky }: { col: SortKey; label: string; center?: boolean; sticky?: boolean }) {
     return (
       <th
-        className={`p-3 sm:p-4 border-b cursor-pointer select-none hover:bg-black/5 whitespace-nowrap ${center ? "text-center" : ""}`}
+        className={`p-3 sm:p-4 border-b cursor-pointer select-none hover:bg-black/5 whitespace-nowrap ${center ? "text-center" : ""} ${sticky ? "sticky left-0 z-20 bg-blue-200" : ""}`}
         onClick={() => toggleSort(col)}
       >
         {label}
@@ -78,7 +86,7 @@ export default function DeliveryHistoryPage() {
     <div className="min-h-screen p-4 sm:p-8 text-black">
       <div className="max-w-6xl mx-auto">
         <Link href="/" className="text-blue-600 hover:underline mb-4 inline-block font-medium">
-          ← Back to Main Menu
+          &larr; Back to Dashboard
         </Link>
 
         <div className="flex flex-wrap justify-between items-center gap-3 mb-6">
@@ -88,11 +96,13 @@ export default function DeliveryHistoryPage() {
           </Link>
         </div>
 
-        {/* Search + Filter bar — stacked on mobile, row on sm+ */}
+        {/* Search + Filter bar */}
         <div className="bg-white p-3 sm:p-4 rounded-t-lg border-x border-t border-gray-200 flex flex-col sm:flex-row gap-3">
           <div className="relative flex-1">
             <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-gray-400">
-              🔍
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
+              </svg>
             </span>
             <input
               type="text"
@@ -114,12 +124,12 @@ export default function DeliveryHistoryPage() {
           </select>
         </div>
 
-        {/* Table — horizontally scrollable on small screens */}
+        {/* Table */}
         <div className="bg-white shadow-md rounded-b-lg overflow-x-auto border border-gray-200">
           <table className="w-full min-w-[700px] text-left border-collapse">
             <thead className="table-header-accent">
               <tr>
-                <Th col="id" label="Delivery ID" />
+                <Th col="id" label="Delivery ID" sticky />
                 <Th col="date" label="Date" />
                 <Th col="productName" label="Product" />
                 <Th col="qty" label="Qty" center />
@@ -133,13 +143,10 @@ export default function DeliveryHistoryPage() {
               {sorted.length > 0 ? (
                 sorted.map((d) => (
                   <tr key={d.id} className="hover:bg-blue-50 transition-colors border-b border-gray-100">
-                    <td className="p-3 sm:p-4 font-mono font-bold text-sm">{d.id}</td>
+                    <td className="p-3 sm:p-4 font-mono font-bold text-sm sticky left-0 z-10 bg-white shadow-[1px_0_0_#e5e7eb]">{d.id}</td>
                     <td className="p-3 sm:p-4 text-sm whitespace-nowrap">{d.date}</td>
                     <td className="p-3 sm:p-4">
-                      <Link
-                        href={`/inventory/${d.productId}`}
-                        className="font-bold hover:underline text-blue-600"
-                      >
+                      <Link href={`/inventory/${d.productId}`} className="font-bold hover:underline text-blue-600">
                         {d.productName}
                       </Link>
                     </td>
@@ -167,7 +174,7 @@ export default function DeliveryHistoryPage() {
           </table>
         </div>
 
-        {/* Summary counts — wraps on mobile */}
+        {/* Summary counts */}
         <div className="mt-6 flex flex-wrap gap-3 sm:gap-4">
           {(["Delivered", "In Transit", "Pending"] as DeliveryStatus[]).map((s) => {
             const count = deliveries.filter((d) => d.status === s).length;

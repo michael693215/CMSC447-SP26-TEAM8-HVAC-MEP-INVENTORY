@@ -23,7 +23,7 @@ export default function ProductDetailPage() {
       <div className="min-h-screen flex flex-col items-center justify-center text-black px-4">
         <p className="text-2xl font-bold mb-4">Product not found.</p>
         <Link href="/inventory" className="text-blue-600 hover:underline">
-          ← Back to Inventory
+          &larr; Back to Inventory
         </Link>
       </div>
     );
@@ -41,7 +41,7 @@ export default function ProductDetailPage() {
     <div className="min-h-screen p-4 sm:p-8 text-black">
       <div className="max-w-4xl mx-auto">
         <Link href="/inventory" className="text-blue-600 hover:underline mb-4 inline-block font-medium">
-          ← Back to Inventory
+          &larr; Back to Inventory
         </Link>
 
         {/* Product header card */}
@@ -53,20 +53,16 @@ export default function ProductDetailPage() {
             <h1 className="text-2xl sm:text-4xl font-black uppercase tracking-tight mb-2">{product.name}</h1>
             <p className="text-gray-700 text-base sm:text-lg">{product.description}</p>
           </div>
-          <span
-            className={`self-start px-3 py-1 rounded text-xs font-bold uppercase whitespace-nowrap ${
-              product.status === "Low Stock"
-                ? "bg-red-100 text-red-700"
-                : product.status === "Out of Stock"
-                ? "bg-gray-200 text-gray-600"
-                : "bg-green-100 text-green-700"
-            }`}
-          >
+          <span className={`self-start px-3 py-1 rounded text-xs font-bold uppercase whitespace-nowrap ${
+            product.status === "Low Stock" ? "bg-red-100 text-red-700"
+            : product.status === "Out of Stock" ? "bg-gray-200 text-gray-600"
+            : "bg-green-100 text-green-700"
+          }`}>
             {product.status}
           </span>
         </div>
 
-        {/* Stats row — 1-col mobile, 3-col sm+ */}
+        {/* Stats row */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-6 sm:mb-8">
           <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5 shadow-sm text-center">
             <p className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">Current Stock</p>
@@ -98,7 +94,7 @@ export default function ProductDetailPage() {
             <table className="w-full min-w-[600px] text-left border-collapse">
               <thead className="table-header-accent">
                 <tr>
-                  <th className="p-3 sm:p-4 border-b">Delivery ID</th>
+                  <th className="p-3 sm:p-4 border-b sticky left-0 z-20 bg-blue-200">Delivery ID</th>
                   <th className="p-3 sm:p-4 border-b">Date</th>
                   <th className="p-3 sm:p-4 border-b text-center">Qty</th>
                   <th className="p-3 sm:p-4 border-b">PO #</th>
@@ -110,7 +106,7 @@ export default function ProductDetailPage() {
               <tbody>
                 {productDeliveries.map((d) => (
                   <tr key={d.id} className="hover:bg-blue-50 transition-colors border-b border-gray-100">
-                    <td className="p-3 sm:p-4 font-mono font-bold text-sm">{d.id}</td>
+                    <td className="p-3 sm:p-4 font-mono font-bold text-sm sticky left-0 z-10 bg-white shadow-[1px_0_0_#e5e7eb]">{d.id}</td>
                     <td className="p-3 sm:p-4 text-sm whitespace-nowrap">{d.date}</td>
                     <td className="p-3 sm:p-4 text-center font-mono">{d.qty}</td>
                     <td className="p-3 sm:p-4 font-mono text-sm">{d.po}</td>

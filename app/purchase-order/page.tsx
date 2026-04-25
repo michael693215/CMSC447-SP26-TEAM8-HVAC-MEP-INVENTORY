@@ -25,7 +25,6 @@ const EMPTY_FORM: POForm = {
   signedBy: "",
 };
 
-// Flexible aliases for each field name
 const FIELD_ALIASES: Record<keyof POForm, string[]> = {
   poNumber:      ["ponumber", "po number", "po_number", "po#", "purchase order number", "order number", "order#"],
   supplier:      ["supplier", "vendor", "company", "supplier name", "vendor name"],
@@ -53,9 +52,7 @@ function normalizeKey(key: string): string {
 function findFieldForKey(key: string): keyof POForm | null {
   const norm = normalizeKey(key);
   for (const [field, aliases] of Object.entries(FIELD_ALIASES)) {
-    if (aliases.some((a) => normalizeKey(a) === norm)) {
-      return field as keyof POForm;
-    }
+    if (aliases.some((a) => normalizeKey(a) === norm)) return field as keyof POForm;
   }
   return null;
 }
@@ -81,23 +78,18 @@ function resolveProductId(value: string): string {
   return value;
 }
 
-// ── PDF parsing ──────────────────────────────────────────────────────────────
-
 async function extractTextFromPDF(file: File): Promise<string> {
   const pdfjsLib = await import("pdfjs-dist");
   pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
     "pdfjs-dist/build/pdf.worker.min.mjs",
     import.meta.url
   ).toString();
-
   const arrayBuffer = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
   let fullText = "";
-
   for (let i = 1; i <= pdf.numPages; i++) {
     const page = await pdf.getPage(i);
     const content = await page.getTextContent();
-
     const items = content.items
       .filter((item): item is (typeof item & { str: string; transform: number[]; width: number }) =>
         "str" in item && item.str !== ""
@@ -106,53 +98,34 @@ async function extractTextFromPDF(file: File): Promise<string> {
         const yDiff = b.transform[5] - a.transform[5];
         return Math.abs(yDiff) > 3 ? yDiff : a.transform[4] - b.transform[4];
       });
-
     let pageText = "";
     let lastY: number | null = null;
     let lastEndX: number | null = null;
-
     for (const item of items) {
       const x = item.transform[4];
       const y = item.transform[5];
-
-      if (lastY !== null && Math.abs(y - lastY) > 3) {
-        pageText += "\n";
-        lastEndX = null;
-      } else if (lastEndX !== null) {
-        const gap = x - lastEndX;
-        if (gap > 1.5) pageText += gap > 8 ? "  " : " ";
-      }
-
+      if (lastY !== null && Math.abs(y - lastY) > 3) { pageText += "\n"; lastEndX = null; }
+      else if (lastEndX !== null) { const gap = x - lastEndX; if (gap > 1.5) pageText += gap > 8 ? "  " : " "; }
       pageText += item.str;
       lastY = y;
       lastEndX = x + (item.width ?? 0);
     }
-
     fullText += pageText + "\n";
   }
-
   return fullText;
 }
 
 function extractFieldsFromText(text: string): Partial<POForm> {
   const result: Partial<POForm> = {};
-
   const labelPatterns: [keyof POForm, RegExp[]][] = [
     ["poNumber", [
       /\bP\.?\s*O\.?\s*(?:NUMBER|Number|#|No\.?|Num\.?)\s*[:\-]?\s*([A-Z0-9\-]+)/i,
       /\bPurchase\s+Order\s*(?:Number|#|No\.?)?\s*[:\-]\s*([A-Z0-9\-]+)/i,
       /\b(PO-\d+)\b/,
     ]],
-    ["supplier", [
-      /\b(?:Supplier|Vendor|Company|Manufacturer)\s*:\s*([^\n\r]{2,60})/i,
-    ]],
-    ["productId", [
-      /\b(?:Product|Item)\s*(?:Name|ID|No\.?)?\s*:\s*([^\n\r,]{2,60})/i,
-    ]],
-    ["qty", [
-      /\b(?:Quantity|Qty)\s*:\s*(\d+)/i,
-      /\bQty\s+(\d+)\b/i,
-    ]],
+    ["supplier", [/\b(?:Supplier|Vendor|Company|Manufacturer)\s*:\s*([^\n\r]{2,60})/i]],
+    ["productId", [/\b(?:Product|Item)\s*(?:Name|ID|No\.?)?\s*:\s*([^\n\r,]{2,60})/i]],
+    ["qty", [/\b(?:Quantity|Qty)\s*:\s*(\d+)/i, /\bQty\s+(\d+)\b/i]],
     ["expectedDate", [
       /\b(?:Expected\s+(?:Delivery\s+)?Date|Delivery\s+Date|Due\s+Date|Ship\s+Date|Req(?:uired)?\s+Date)\s*[:\-]?\s*([^\n\r,]{4,30})/i,
       /\bDATE\b[ \t]+(\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4})/i,
@@ -162,40 +135,26 @@ function extractFieldsFromText(text: string): Partial<POForm> {
       /\b(?:Ordered\s+By|Signed\s+By|Requested\s+By|Prepared\s+By|Approved\s+By)\s*:\s*([^\n\r,]{2,60})/i,
       /\b(?:ORDERED\s+BY|SIGNED\s+BY|PREPARED\s+BY)\b[^\n]*\n[ \t]*([A-Za-z][A-Za-z\.\-]{1,29})(?:[ \t]|$)/i,
     ]],
-    ["notes", [
-      /\b(?:Notes?|Comments?|Remarks?|Instructions?)\s*:\s*([^\n\r]{2,200})/i,
-    ]],
+    ["notes", [/\b(?:Notes?|Comments?|Remarks?|Instructions?)\s*:\s*([^\n\r]{2,200})/i]],
   ];
-
   for (const [field, regexes] of labelPatterns) {
     for (const regex of regexes) {
       const match = text.match(regex);
       const value = match?.[1]?.trim();
-      if (value) {
-        result[field] = value;
-        break;
-      }
+      if (value) { result[field] = value; break; }
     }
   }
-
   if (!result.productId) {
     for (const p of products) {
-      if (text.toLowerCase().includes(p.name.toLowerCase())) {
-        result.productId = String(p.id);
-        break;
-      }
+      if (text.toLowerCase().includes(p.name.toLowerCase())) { result.productId = String(p.id); break; }
     }
   }
-
   return result;
 }
 
 async function parsePDF(file: File): Promise<Partial<POForm>> {
-  const text = await extractTextFromPDF(file);
-  return extractFieldsFromText(text);
+  return extractFieldsFromText(await extractTextFromPDF(file));
 }
-
-// ── CSV / JSON parsing ────────────────────────────────────────────────────────
 
 function parseCSV(text: string): Partial<POForm> {
   const lines = text.trim().split(/\r?\n/);
@@ -206,9 +165,7 @@ function parseCSV(text: string): Partial<POForm> {
   const result: Partial<POForm> = {};
   headers.forEach((header, i) => {
     const field = findFieldForKey(header);
-    if (field && values[i] !== undefined && values[i] !== "") {
-      result[field] = values[i];
-    }
+    if (field && values[i] !== undefined && values[i] !== "") result[field] = values[i];
   });
   return result;
 }
@@ -219,26 +176,53 @@ function parseJSON(text: string): Partial<POForm> {
   const result: Partial<POForm> = {};
   for (const [key, value] of Object.entries(obj)) {
     const field = findFieldForKey(key);
-    if (field && value !== null && value !== undefined && String(value) !== "") {
-      result[field] = String(value);
-    }
+    if (field && value !== null && value !== undefined && String(value) !== "") result[field] = String(value);
   }
   return result;
+}
+
+function UploadIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className="w-8 h-8 mx-auto text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+    </svg>
+  );
+}
+
+function CheckCircleIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className="w-8 h-8 mx-auto text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  );
+}
+
+function XCircleIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className="w-8 h-8 mx-auto text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  );
+}
+
+function SuccessCheckIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" className="w-16 h-16 mx-auto text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  );
 }
 
 export default function PurchaseOrderPage() {
   const [form, setForm] = useState<POForm>(EMPTY_FORM);
   const [submitted, setSubmitted] = useState(false);
-
   const [uploadStatus, setUploadStatus] = useState<"idle" | "success" | "error">("idle");
   const [uploadMessage, setUploadMessage] = useState("");
   const [filledFields, setFilledFields] = useState<string[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
-  ) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
@@ -275,12 +259,8 @@ export default function PurchaseOrderPage() {
       return;
     }
     const normalized: Partial<POForm> = { ...parsed };
-    if (normalized.expectedDate) {
-      normalized.expectedDate = normalizeDate(normalized.expectedDate);
-    }
-    if (normalized.productId) {
-      normalized.productId = resolveProductId(normalized.productId);
-    }
+    if (normalized.expectedDate) normalized.expectedDate = normalizeDate(normalized.expectedDate);
+    if (normalized.productId) normalized.productId = resolveProductId(normalized.productId);
     setForm((prev) => ({ ...prev, ...normalized }));
     const filled = Object.keys(normalized) as (keyof POForm)[];
     setFilledFields(filled);
@@ -295,23 +275,18 @@ export default function PurchaseOrderPage() {
       setUploadMessage("Unsupported file type. Please upload a .csv, .json, or .pdf file.");
       return;
     }
-
     if (ext === "pdf") {
-      parsePDF(file)
-        .then(applyParsedData)
-        .catch(() => {
-          setUploadStatus("error");
-          setUploadMessage("Failed to parse PDF. Ensure it contains readable text.");
-        });
+      parsePDF(file).then(applyParsedData).catch(() => {
+        setUploadStatus("error");
+        setUploadMessage("Failed to parse PDF. Ensure it contains readable text.");
+      });
       return;
     }
-
     const reader = new FileReader();
     reader.onload = (event) => {
       const text = event.target?.result as string;
       try {
-        const parsed = ext === "json" ? parseJSON(text) : parseCSV(text);
-        applyParsedData(parsed);
+        applyParsedData(ext === "json" ? parseJSON(text) : parseCSV(text));
       } catch {
         setUploadStatus("error");
         setUploadMessage("Failed to parse file. Check the format and try again.");
@@ -333,29 +308,20 @@ export default function PurchaseOrderPage() {
     if (file) processFile(file);
   };
 
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-  };
-
-  const handleDragLeave = () => setIsDragging(false);
-
   if (submitted) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-4 sm:p-8 text-black">
         <div className="bg-white rounded-2xl border-2 border-black shadow-lg p-8 sm:p-12 max-w-md w-full text-center mx-4">
-          <div className="text-6xl mb-6">✅</div>
+          <div className="mb-6"><SuccessCheckIcon /></div>
           <h2 className="text-2xl font-black uppercase mb-2">Order Submitted</h2>
           <p className="text-gray-600 mb-2">
             Purchase Order <span className="font-mono font-bold">{form.poNumber}</span> has been recorded.
           </p>
           <p className="text-gray-500 text-sm mb-8">
-            {form.qty} × {products.find((p) => p.id === Number(form.productId) || p.name === form.productId)?.name ?? (form.productId || "—")} from {form.supplier}
+            {form.qty} &times; {products.find((p) => p.id === Number(form.productId) || p.name === form.productId)?.name ?? (form.productId || "—")} from {form.supplier}
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
-            <button onClick={handleReset} className="btn-primary">
-              + New Order
-            </button>
+            <button onClick={handleReset} className="btn-primary">+ New Order</button>
             <Link href="/delivery-history" className="btn-secondary py-2 px-4 rounded-md text-center">
               View Deliveries
             </Link>
@@ -369,7 +335,7 @@ export default function PurchaseOrderPage() {
     <div className="min-h-screen p-4 sm:p-8 text-black">
       <div className="max-w-2xl mx-auto">
         <Link href="/" className="text-blue-600 hover:underline mb-4 inline-block font-medium">
-          ← Back to Main Menu
+          &larr; Back to Dashboard
         </Link>
 
         <div className="mb-6">
@@ -377,53 +343,38 @@ export default function PurchaseOrderPage() {
           <p className="text-gray-500 mt-1 text-sm">Fill out the form below to create a new delivery purchase order.</p>
         </div>
 
-        {/* File Upload Section */}
+        {/* File Upload */}
         <div className="mb-6">
           <div
             onDrop={handleDrop}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
+            onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+            onDragLeave={() => setIsDragging(false)}
             onClick={() => fileInputRef.current?.click()}
-            className={`
-              border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-colors
-              ${isDragging
-                ? "border-blue-500 bg-blue-50"
-                : uploadStatus === "success"
-                ? "border-green-400 bg-green-50"
-                : uploadStatus === "error"
-                ? "border-red-400 bg-red-50"
-                : "border-gray-300 bg-gray-50 hover:border-gray-400 hover:bg-gray-100"
-              }
-            `}
+            className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-colors ${
+              isDragging ? "border-blue-500 bg-blue-50"
+              : uploadStatus === "success" ? "border-green-400 bg-green-50"
+              : uploadStatus === "error" ? "border-red-400 bg-red-50"
+              : "border-gray-300 bg-gray-50 hover:border-gray-400 hover:bg-gray-100"
+            }`}
           >
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".csv,.json,.pdf"
-              onChange={handleFileInput}
-              className="hidden"
-            />
-            <div className="text-2xl mb-2">
-              {uploadStatus === "success" ? "✅" : uploadStatus === "error" ? "❌" : "📂"}
+            <input ref={fileInputRef} type="file" accept=".csv,.json,.pdf" onChange={handleFileInput} className="hidden" />
+            <div className="mb-2">
+              {uploadStatus === "success" ? <CheckCircleIcon />
+                : uploadStatus === "error" ? <XCircleIcon />
+                : <UploadIcon />}
             </div>
             <p className="font-semibold text-sm text-gray-700">
               {uploadStatus === "idle" ? "" : uploadMessage}
             </p>
             <p className="text-xs text-gray-400 mt-1">
-              {uploadStatus === "idle"
-                ? "Upload a CSV/JSON/PDF file."
-                : "Click to upload a different file"}
+              {uploadStatus === "idle" ? "Upload a CSV / JSON / PDF to autofill the form" : "Click to upload a different file"}
             </p>
           </div>
 
-          {/* Filled fields badges */}
           {uploadStatus === "success" && filledFields.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-2">
               {filledFields.map((f) => (
-                <span
-                  key={f}
-                  className="text-xs bg-green-100 text-green-700 border border-green-300 rounded-full px-2 py-0.5 font-medium"
-                >
+                <span key={f} className="text-xs bg-green-100 text-green-700 border border-green-300 rounded-full px-2 py-0.5 font-medium">
                   {FIELD_LABELS[f as keyof POForm]}
                 </span>
               ))}
@@ -434,130 +385,60 @@ export default function PurchaseOrderPage() {
         <div className="bg-white rounded-2xl border border-gray-200 shadow-md p-5 sm:p-8">
           <form onSubmit={handleSubmit} className="flex flex-col gap-5 sm:gap-6">
 
-            {/* PO Number + Supplier — stacked on mobile, side-by-side on sm+ */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="flex flex-col gap-1">
                 <label className="text-xs font-bold uppercase tracking-wider text-gray-600">
                   PO Number <span className="text-red-500">*</span>
                 </label>
-                <input
-                  name="poNumber"
-                  value={form.poNumber}
-                  onChange={handleChange}
-                  placeholder="e.g. PO-006"
-                  className="input-themed p-2 text-black w-full font-mono"
-                  required
-                />
+                <input name="poNumber" value={form.poNumber} onChange={handleChange} placeholder="e.g. PO-006" className="input-themed p-2 text-black w-full font-mono" required />
               </div>
               <div className="flex flex-col gap-1">
                 <label className="text-xs font-bold uppercase tracking-wider text-gray-600">
                   Supplier <span className="text-red-500">*</span>
                 </label>
-                <input
-                  name="supplier"
-                  value={form.supplier}
-                  onChange={handleChange}
-                  placeholder="Supplier name"
-                  className="input-themed p-2 text-black w-full"
-                  required
-                />
+                <input name="supplier" value={form.supplier} onChange={handleChange} placeholder="Supplier name" className="input-themed p-2 text-black w-full" required />
               </div>
             </div>
 
-            {/* Product + Quantity */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="flex flex-col gap-1">
                 <label className="text-xs font-bold uppercase tracking-wider text-gray-600">
                   Product <span className="text-red-500">*</span>
                 </label>
-                <input
-                  name="productId"
-                  value={form.productId}
-                  onChange={handleChange}
-                  list="products-datalist"
-                  placeholder="Select or type a product..."
-                  className="input-themed p-2 text-black w-full"
-                  required
-                />
+                <input name="productId" value={form.productId} onChange={handleChange} list="products-datalist" placeholder="Select or type a product..." className="input-themed p-2 text-black w-full" required />
                 <datalist id="products-datalist">
-                  {products.map((p) => (
-                    <option key={p.id} value={p.name} />
-                  ))}
+                  {products.map((p) => <option key={p.id} value={p.name} />)}
                 </datalist>
               </div>
               <div className="flex flex-col gap-1">
                 <label className="text-xs font-bold uppercase tracking-wider text-gray-600">
                   Quantity <span className="text-red-500">*</span>
                 </label>
-                <input
-                  name="qty"
-                  type="number"
-                  min="1"
-                  value={form.qty}
-                  onChange={handleChange}
-                  placeholder="0"
-                  className="input-themed p-2 text-black w-full font-mono"
-                  required
-                />
+                <input name="qty" type="number" min="1" value={form.qty} onChange={handleChange} placeholder="0" className="input-themed p-2 text-black w-full font-mono" required />
               </div>
             </div>
 
-            {/* Expected Date + Signed By */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="flex flex-col gap-1">
                 <label className="text-xs font-bold uppercase tracking-wider text-gray-600">
                   Expected Delivery Date <span className="text-red-500">*</span>
                 </label>
-                <input
-                  name="expectedDate"
-                  type="date"
-                  value={form.expectedDate}
-                  onChange={handleChange}
-                  className="input-themed p-2 text-black w-full"
-                  required
-                />
+                <input name="expectedDate" type="date" value={form.expectedDate} onChange={handleChange} className="input-themed p-2 text-black w-full" required />
               </div>
               <div className="flex flex-col gap-1">
-                <label className="text-xs font-bold uppercase tracking-wider text-gray-600">
-                  Ordered By
-                </label>
-                <input
-                  name="signedBy"
-                  value={form.signedBy}
-                  onChange={handleChange}
-                  placeholder="Your name"
-                  className="input-themed p-2 text-black w-full"
-                />
+                <label className="text-xs font-bold uppercase tracking-wider text-gray-600">Ordered By</label>
+                <input name="signedBy" value={form.signedBy} onChange={handleChange} placeholder="Your name" className="input-themed p-2 text-black w-full" />
               </div>
             </div>
 
-            {/* Notes */}
             <div className="flex flex-col gap-1">
-              <label className="text-xs font-bold uppercase tracking-wider text-gray-600">
-                Notes
-              </label>
-              <textarea
-                name="notes"
-                value={form.notes}
-                onChange={handleChange}
-                placeholder="Any special instructions or notes..."
-                rows={3}
-                className="input-themed p-2 text-black w-full resize-none"
-              />
+              <label className="text-xs font-bold uppercase tracking-wider text-gray-600">Notes</label>
+              <textarea name="notes" value={form.notes} onChange={handleChange} placeholder="Any special instructions or notes..." rows={3} className="input-themed p-2 text-black w-full resize-none" />
             </div>
 
-            {/* Actions — stacked on mobile, side-by-side on sm+ */}
             <div className="flex flex-col sm:flex-row gap-3 pt-2">
-              <button type="submit" className="btn-primary sm:flex-1">
-                Submit Purchase Order
-              </button>
-              <button
-                type="button"
-                onClick={handleReset}
-                className="btn-secondary sm:flex-1"
-              >
-                Clear Form
-              </button>
+              <button type="submit" className="btn-primary sm:flex-1">Submit Purchase Order</button>
+              <button type="button" onClick={handleReset} className="btn-secondary sm:flex-1">Clear Form</button>
             </div>
           </form>
         </div>
