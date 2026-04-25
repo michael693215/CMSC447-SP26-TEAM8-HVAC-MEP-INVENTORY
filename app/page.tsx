@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { signOut } from './actions'
 
 export default function MainMenu() {
   const features = [
@@ -41,15 +42,13 @@ export default function MainMenu() {
   ];
 
   return (
-    <div className="flex flex-col items-center justify-start min-h-screen p-4 sm:p-6 md:p-12">
+    <div className="flex flex-col items-center justify-start min-h-screen p-6 md:p-12 bg-gray-100">
       {/* Header */}
-      <header className="w-full max-w-5xl flex flex-wrap justify-between items-center gap-3 mb-8 sm:mb-10">
-        <h1 className="text-2xl sm:text-3xl md:text-4xl font-black text-black leading-tight">
-          Inventory Management System
-        </h1>
-        <Link href="/login" className="btn-primary shrink-0">
+      <header className="w-full max-w-5xl flex justify-between items-center mb-10">
+        <h1 className="text-4xl font-black text-black">Inventory Management System</h1>
+        <button onClick={ signOut } className="btn-primary">
           Sign Out
-        </Link>
+        </button>
       </header>
 
       {/* Grid: 1-col on mobile, 2-col on sm+ */}
