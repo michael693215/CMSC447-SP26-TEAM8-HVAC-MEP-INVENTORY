@@ -7,8 +7,8 @@ export default function AboutPage() {
       {/* Same style as menu */}
       <header className="w-full max-w-5xl flex justify-between items-center mb-10">
         <h1 className="text-4xl font-black text-black">About This App</h1>
-        <Link href="/" className="btn-primary">
-          Back to Menu
+        <Link href="/" className="text-blue-600 hover:underline mb-4 inline-block font-medium">
+          &larr; Back to Dashboard
         </Link>
       </header>
 
