@@ -65,7 +65,7 @@ export default function DeliveryHistoryPage() {
   function Th({ col, label, center }: { col: SortKey; label: string; center?: boolean }) {
     return (
       <th
-        className={`p-4 border-b cursor-pointer select-none hover:bg-black/5 whitespace-nowrap ${center ? "text-center" : ""}`}
+        className={`p-3 sm:p-4 border-b cursor-pointer select-none hover:bg-black/5 whitespace-nowrap ${center ? "text-center" : ""}`}
         onClick={() => toggleSort(col)}
       >
         {label}
@@ -75,21 +75,21 @@ export default function DeliveryHistoryPage() {
   }
 
   return (
-    <div className="min-h-screen p-8 text-black">
+    <div className="min-h-screen p-4 sm:p-8 text-black">
       <div className="max-w-6xl mx-auto">
         <Link href="/" className="text-blue-600 hover:underline mb-4 inline-block font-medium">
           ← Back to Main Menu
         </Link>
 
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold uppercase tracking-tight">Delivery History</h1>
-          <Link href="/purchase-order" className="btn-primary">
+        <div className="flex flex-wrap justify-between items-center gap-3 mb-6">
+          <h1 className="text-2xl sm:text-3xl font-bold uppercase tracking-tight">Delivery History</h1>
+          <Link href="/purchase-order" className="btn-primary shrink-0">
             + New Purchase Order
           </Link>
         </div>
 
-        {/* Search + Filter bar */}
-        <div className="bg-white p-4 rounded-t-lg border-x border-t border-gray-200 flex gap-4 items-center">
+        {/* Search + Filter bar — stacked on mobile, row on sm+ */}
+        <div className="bg-white p-3 sm:p-4 rounded-t-lg border-x border-t border-gray-200 flex flex-col sm:flex-row gap-3">
           <div className="relative flex-1">
             <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-gray-400">
               🔍
@@ -103,7 +103,7 @@ export default function DeliveryHistoryPage() {
             />
           </div>
           <select
-            className="input-themed py-2 px-3 text-sm text-black"
+            className="input-themed py-2 px-3 text-sm text-black w-full sm:w-auto"
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as DeliveryStatus | "All")}
           >
@@ -114,9 +114,9 @@ export default function DeliveryHistoryPage() {
           </select>
         </div>
 
-        {/* Table */}
-        <div className="bg-white shadow-md rounded-b-lg overflow-hidden border border-gray-200">
-          <table className="w-full text-left border-collapse">
+        {/* Table — horizontally scrollable on small screens */}
+        <div className="bg-white shadow-md rounded-b-lg overflow-x-auto border border-gray-200">
+          <table className="w-full min-w-[700px] text-left border-collapse">
             <thead className="table-header-accent">
               <tr>
                 <Th col="id" label="Delivery ID" />
@@ -133,9 +133,9 @@ export default function DeliveryHistoryPage() {
               {sorted.length > 0 ? (
                 sorted.map((d) => (
                   <tr key={d.id} className="hover:bg-blue-50 transition-colors border-b border-gray-100">
-                    <td className="p-4 font-mono font-bold text-sm">{d.id}</td>
-                    <td className="p-4 text-sm">{d.date}</td>
-                    <td className="p-4">
+                    <td className="p-3 sm:p-4 font-mono font-bold text-sm">{d.id}</td>
+                    <td className="p-3 sm:p-4 text-sm whitespace-nowrap">{d.date}</td>
+                    <td className="p-3 sm:p-4">
                       <Link
                         href={`/inventory/${d.productId}`}
                         className="font-bold hover:underline text-blue-600"
@@ -143,14 +143,14 @@ export default function DeliveryHistoryPage() {
                         {d.productName}
                       </Link>
                     </td>
-                    <td className="p-4 text-center font-mono">{d.qty}</td>
-                    <td className="p-4 text-sm text-gray-700">{d.supplier}</td>
-                    <td className="p-4 font-mono text-sm">{d.po}</td>
-                    <td className="p-4 text-sm text-gray-600">
+                    <td className="p-3 sm:p-4 text-center font-mono">{d.qty}</td>
+                    <td className="p-3 sm:p-4 text-sm text-gray-700">{d.supplier}</td>
+                    <td className="p-3 sm:p-4 font-mono text-sm">{d.po}</td>
+                    <td className="p-3 sm:p-4 text-sm text-gray-600">
                       {d.signedBy || <span className="italic text-gray-400">—</span>}
                     </td>
-                    <td className="p-4 text-center">
-                      <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${STATUS_STYLES[d.status]}`}>
+                    <td className="p-3 sm:p-4 text-center">
+                      <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase whitespace-nowrap ${STATUS_STYLES[d.status]}`}>
                         {d.status}
                       </span>
                     </td>
@@ -167,13 +167,13 @@ export default function DeliveryHistoryPage() {
           </table>
         </div>
 
-        {/* Summary counts */}
-        <div className="mt-6 flex gap-4">
+        {/* Summary counts — wraps on mobile */}
+        <div className="mt-6 flex flex-wrap gap-3 sm:gap-4">
           {(["Delivered", "In Transit", "Pending"] as DeliveryStatus[]).map((s) => {
             const count = deliveries.filter((d) => d.status === s).length;
             return (
-              <div key={s} className="bg-white rounded-lg border border-gray-200 px-5 py-3 flex items-center gap-3 shadow-sm">
-                <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${STATUS_STYLES[s]}`}>{s}</span>
+              <div key={s} className="bg-white rounded-lg border border-gray-200 px-4 sm:px-5 py-3 flex items-center gap-3 shadow-sm">
+                <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase whitespace-nowrap ${STATUS_STYLES[s]}`}>{s}</span>
                 <span className="text-2xl font-black">{count}</span>
               </div>
             );

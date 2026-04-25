@@ -20,7 +20,7 @@ export default function ProductDetailPage() {
 
   if (!product) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center text-black">
+      <div className="min-h-screen flex flex-col items-center justify-center text-black px-4">
         <p className="text-2xl font-bold mb-4">Product not found.</p>
         <Link href="/inventory" className="text-blue-600 hover:underline">
           ← Back to Inventory
@@ -38,23 +38,23 @@ export default function ProductDetailPage() {
     .reduce((sum, d) => sum + d.qty, 0);
 
   return (
-    <div className="min-h-screen p-8 text-black">
+    <div className="min-h-screen p-4 sm:p-8 text-black">
       <div className="max-w-4xl mx-auto">
         <Link href="/inventory" className="text-blue-600 hover:underline mb-4 inline-block font-medium">
           ← Back to Inventory
         </Link>
 
         {/* Product header card */}
-        <div className="bg-blue-200 border-2 border-black rounded-2xl p-8 mb-8 flex items-start justify-between shadow-lg">
+        <div className="bg-blue-200 border-2 border-black rounded-2xl p-5 sm:p-8 mb-6 sm:mb-8 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 shadow-lg">
           <div>
             <p className="text-xs font-bold uppercase tracking-widest text-gray-600 mb-1">
               {product.category}
             </p>
-            <h1 className="text-4xl font-black uppercase tracking-tight mb-2">{product.name}</h1>
-            <p className="text-gray-700 text-lg">{product.description}</p>
+            <h1 className="text-2xl sm:text-4xl font-black uppercase tracking-tight mb-2">{product.name}</h1>
+            <p className="text-gray-700 text-base sm:text-lg">{product.description}</p>
           </div>
           <span
-            className={`mt-1 px-3 py-1 rounded text-xs font-bold uppercase ${
+            className={`self-start px-3 py-1 rounded text-xs font-bold uppercase whitespace-nowrap ${
               product.status === "Low Stock"
                 ? "bg-red-100 text-red-700"
                 : product.status === "Out of Stock"
@@ -66,60 +66,60 @@ export default function ProductDetailPage() {
           </span>
         </div>
 
-        {/* Stats row */}
-        <div className="grid grid-cols-3 gap-4 mb-8">
-          <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm text-center">
+        {/* Stats row — 1-col mobile, 3-col sm+ */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-6 sm:mb-8">
+          <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5 shadow-sm text-center">
             <p className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">Current Stock</p>
-            <p className="text-5xl font-black">{product.qty}</p>
+            <p className="text-4xl sm:text-5xl font-black">{product.qty}</p>
             <p className="text-xs text-gray-500 mt-1">units</p>
           </div>
-          <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm text-center">
+          <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5 shadow-sm text-center">
             <p className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">Total Received</p>
-            <p className="text-5xl font-black text-green-700">{totalReceived}</p>
+            <p className="text-4xl sm:text-5xl font-black text-green-700">{totalReceived}</p>
             <p className="text-xs text-gray-500 mt-1">units delivered</p>
           </div>
-          <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm text-center">
+          <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5 shadow-sm text-center">
             <p className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">Incoming</p>
-            <p className="text-5xl font-black text-yellow-600">{totalPending}</p>
+            <p className="text-4xl sm:text-5xl font-black text-yellow-600">{totalPending}</p>
             <p className="text-xs text-gray-500 mt-1">units pending / in transit</p>
           </div>
         </div>
 
-        {/* Deliveries table */}
-        <div className="mb-4 flex justify-between items-center">
-          <h2 className="text-xl font-bold uppercase tracking-tight">Associated Deliveries</h2>
-          <Link href="/purchase-order" className="btn-accent px-4 py-2 text-sm">
+        {/* Deliveries table header */}
+        <div className="mb-4 flex flex-wrap justify-between items-center gap-3">
+          <h2 className="text-lg sm:text-xl font-bold uppercase tracking-tight">Associated Deliveries</h2>
+          <Link href="/purchase-order" className="btn-accent px-4 py-2 text-sm shrink-0">
             + New Purchase Order
           </Link>
         </div>
 
         {productDeliveries.length > 0 ? (
-          <div className="bg-white shadow-md rounded-lg overflow-hidden border border-gray-200">
-            <table className="w-full text-left border-collapse">
+          <div className="bg-white shadow-md rounded-lg overflow-x-auto border border-gray-200">
+            <table className="w-full min-w-[600px] text-left border-collapse">
               <thead className="table-header-accent">
                 <tr>
-                  <th className="p-4 border-b">Delivery ID</th>
-                  <th className="p-4 border-b">Date</th>
-                  <th className="p-4 border-b text-center">Qty</th>
-                  <th className="p-4 border-b">PO #</th>
-                  <th className="p-4 border-b">Supplier</th>
-                  <th className="p-4 border-b">Signed By</th>
-                  <th className="p-4 border-b text-center">Status</th>
+                  <th className="p-3 sm:p-4 border-b">Delivery ID</th>
+                  <th className="p-3 sm:p-4 border-b">Date</th>
+                  <th className="p-3 sm:p-4 border-b text-center">Qty</th>
+                  <th className="p-3 sm:p-4 border-b">PO #</th>
+                  <th className="p-3 sm:p-4 border-b">Supplier</th>
+                  <th className="p-3 sm:p-4 border-b">Signed By</th>
+                  <th className="p-3 sm:p-4 border-b text-center">Status</th>
                 </tr>
               </thead>
               <tbody>
                 {productDeliveries.map((d) => (
                   <tr key={d.id} className="hover:bg-blue-50 transition-colors border-b border-gray-100">
-                    <td className="p-4 font-mono font-bold text-sm">{d.id}</td>
-                    <td className="p-4 text-sm">{d.date}</td>
-                    <td className="p-4 text-center font-mono">{d.qty}</td>
-                    <td className="p-4 font-mono text-sm">{d.po}</td>
-                    <td className="p-4 text-sm text-gray-700">{d.supplier}</td>
-                    <td className="p-4 text-sm text-gray-600">
+                    <td className="p-3 sm:p-4 font-mono font-bold text-sm">{d.id}</td>
+                    <td className="p-3 sm:p-4 text-sm whitespace-nowrap">{d.date}</td>
+                    <td className="p-3 sm:p-4 text-center font-mono">{d.qty}</td>
+                    <td className="p-3 sm:p-4 font-mono text-sm">{d.po}</td>
+                    <td className="p-3 sm:p-4 text-sm text-gray-700">{d.supplier}</td>
+                    <td className="p-3 sm:p-4 text-sm text-gray-600">
                       {d.signedBy || <span className="italic text-gray-400">—</span>}
                     </td>
-                    <td className="p-4 text-center">
-                      <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${STATUS_STYLES[d.status]}`}>
+                    <td className="p-3 sm:p-4 text-center">
+                      <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase whitespace-nowrap ${STATUS_STYLES[d.status]}`}>
                         {d.status}
                       </span>
                     </td>

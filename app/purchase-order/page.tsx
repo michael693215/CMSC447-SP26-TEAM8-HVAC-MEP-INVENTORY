@@ -98,8 +98,6 @@ async function extractTextFromPDF(file: File): Promise<string> {
     const page = await pdf.getPage(i);
     const content = await page.getTextContent();
 
-    // Sort items by descending Y (top→bottom), then ascending X (left→right)
-    // so table rows and columns reconstruct in reading order.
     const items = content.items
       .filter((item): item is (typeof item & { str: string; transform: number[]; width: number }) =>
         "str" in item && item.str !== ""
@@ -118,13 +116,10 @@ async function extractTextFromPDF(file: File): Promise<string> {
       const y = item.transform[5];
 
       if (lastY !== null && Math.abs(y - lastY) > 3) {
-        // New row
         pageText += "\n";
         lastEndX = null;
       } else if (lastEndX !== null) {
         const gap = x - lastEndX;
-        // Only add a space if there is a meaningful visual gap between glyphs.
-        // Many PDFs render each character as its own text item with gap ≈ 0.
         if (gap > 1.5) pageText += gap > 8 ? "  " : " ";
       }
 
@@ -144,37 +139,27 @@ function extractFieldsFromText(text: string): Partial<POForm> {
 
   const labelPatterns: [keyof POForm, RegExp[]][] = [
     ["poNumber", [
-      // "P.O. NUMBER  115502" or "PO Number: PO-007"
       /\bP\.?\s*O\.?\s*(?:NUMBER|Number|#|No\.?|Num\.?)\s*[:\-]?\s*([A-Z0-9\-]+)/i,
       /\bPurchase\s+Order\s*(?:Number|#|No\.?)?\s*[:\-]\s*([A-Z0-9\-]+)/i,
       /\b(PO-\d+)\b/,
     ]],
     ["supplier", [
-      // Only fill when there's an unambiguous explicit label with colon
       /\b(?:Supplier|Vendor|Company|Manufacturer)\s*:\s*([^\n\r]{2,60})/i,
     ]],
     ["productId", [
       /\b(?:Product|Item)\s*(?:Name|ID|No\.?)?\s*:\s*([^\n\r,]{2,60})/i,
     ]],
     ["qty", [
-      // Require colon — avoids matching table column headers like "QUANTITY  UOM"
-      // Also exclude "Amount" entirely (that's a price column, not a count)
       /\b(?:Quantity|Qty)\s*:\s*(\d+)/i,
-      // Allow no colon only for very specific "Qty N" short forms
       /\bQty\s+(\d+)\b/i,
     ]],
     ["expectedDate", [
       /\b(?:Expected\s+(?:Delivery\s+)?Date|Delivery\s+Date|Due\s+Date|Ship\s+Date|Req(?:uired)?\s+Date)\s*[:\-]?\s*([^\n\r,]{4,30})/i,
-      // "DATE  1/19/2026" on the same line (standard PO table row)
       /\bDATE\b[ \t]+(\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4})/i,
-      // "DATE" label with date on the very next line
       /\bDATE\b[ \t]*\n[ \t]*(\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4})/i,
     ]],
     ["signedBy", [
-      // Inline with explicit colon: "Ordered By: John Smith"
       /\b(?:Ordered\s+By|Signed\s+By|Requested\s+By|Prepared\s+By|Approved\s+By)\s*:\s*([^\n\r,]{2,60})/i,
-      // Table: header row then value on the NEXT line — name-only (letters/dots/hyphens, no digits)
-      // Uses [ \t]* so it won't cross a second newline.
       /\b(?:ORDERED\s+BY|SIGNED\s+BY|PREPARED\s+BY)\b[^\n]*\n[ \t]*([A-Za-z][A-Za-z\.\-]{1,29})(?:[ \t]|$)/i,
     ]],
     ["notes", [
@@ -193,7 +178,6 @@ function extractFieldsFromText(text: string): Partial<POForm> {
     }
   }
 
-  // Scan for known product names anywhere in text
   if (!result.productId) {
     for (const p of products) {
       if (text.toLowerCase().includes(p.name.toLowerCase())) {
@@ -358,8 +342,8 @@ export default function PurchaseOrderPage() {
 
   if (submitted) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center p-8 text-black">
-        <div className="bg-white rounded-2xl border-2 border-black shadow-lg p-12 max-w-md w-full text-center">
+      <div className="min-h-screen flex flex-col items-center justify-center p-4 sm:p-8 text-black">
+        <div className="bg-white rounded-2xl border-2 border-black shadow-lg p-8 sm:p-12 max-w-md w-full text-center mx-4">
           <div className="text-6xl mb-6">✅</div>
           <h2 className="text-2xl font-black uppercase mb-2">Order Submitted</h2>
           <p className="text-gray-600 mb-2">
@@ -368,11 +352,11 @@ export default function PurchaseOrderPage() {
           <p className="text-gray-500 text-sm mb-8">
             {form.qty} × {products.find((p) => p.id === Number(form.productId) || p.name === form.productId)?.name ?? (form.productId || "—")} from {form.supplier}
           </p>
-          <div className="flex gap-3 justify-center">
+          <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <button onClick={handleReset} className="btn-primary">
               + New Order
             </button>
-            <Link href="/delivery-history" className="btn-secondary py-2 px-4 rounded-md">
+            <Link href="/delivery-history" className="btn-secondary py-2 px-4 rounded-md text-center">
               View Deliveries
             </Link>
           </div>
@@ -382,14 +366,14 @@ export default function PurchaseOrderPage() {
   }
 
   return (
-    <div className="min-h-screen p-8 text-black">
+    <div className="min-h-screen p-4 sm:p-8 text-black">
       <div className="max-w-2xl mx-auto">
         <Link href="/" className="text-blue-600 hover:underline mb-4 inline-block font-medium">
           ← Back to Main Menu
         </Link>
 
         <div className="mb-6">
-          <h1 className="text-3xl font-bold uppercase tracking-tight">New Purchase Order</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold uppercase tracking-tight">New Purchase Order</h1>
           <p className="text-gray-500 mt-1 text-sm">Fill out the form below to create a new delivery purchase order.</p>
         </div>
 
@@ -423,9 +407,7 @@ export default function PurchaseOrderPage() {
               {uploadStatus === "success" ? "✅" : uploadStatus === "error" ? "❌" : "📂"}
             </div>
             <p className="font-semibold text-sm text-gray-700">
-              {uploadStatus === "idle"
-                ? ""
-                : uploadMessage}
+              {uploadStatus === "idle" ? "" : uploadMessage}
             </p>
             <p className="text-xs text-gray-400 mt-1">
               {uploadStatus === "idle"
@@ -449,11 +431,11 @@ export default function PurchaseOrderPage() {
           )}
         </div>
 
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-md p-8">
-          <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-md p-5 sm:p-8">
+          <form onSubmit={handleSubmit} className="flex flex-col gap-5 sm:gap-6">
 
-            {/* PO Number + Supplier */}
-            <div className="grid grid-cols-2 gap-4">
+            {/* PO Number + Supplier — stacked on mobile, side-by-side on sm+ */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="flex flex-col gap-1">
                 <label className="text-xs font-bold uppercase tracking-wider text-gray-600">
                   PO Number <span className="text-red-500">*</span>
@@ -483,7 +465,7 @@ export default function PurchaseOrderPage() {
             </div>
 
             {/* Product + Quantity */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="flex flex-col gap-1">
                 <label className="text-xs font-bold uppercase tracking-wider text-gray-600">
                   Product <span className="text-red-500">*</span>
@@ -521,7 +503,7 @@ export default function PurchaseOrderPage() {
             </div>
 
             {/* Expected Date + Signed By */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="flex flex-col gap-1">
                 <label className="text-xs font-bold uppercase tracking-wider text-gray-600">
                   Expected Delivery Date <span className="text-red-500">*</span>
@@ -564,15 +546,15 @@ export default function PurchaseOrderPage() {
               />
             </div>
 
-            {/* Actions */}
-            <div className="flex gap-3 pt-2">
-              <button type="submit" className="btn-primary flex-1">
+            {/* Actions — stacked on mobile, side-by-side on sm+ */}
+            <div className="flex flex-col sm:flex-row gap-3 pt-2">
+              <button type="submit" className="btn-primary sm:flex-1">
                 Submit Purchase Order
               </button>
               <button
                 type="button"
                 onClick={handleReset}
-                className="btn-secondary flex-1"
+                className="btn-secondary sm:flex-1"
               >
                 Clear Form
               </button>

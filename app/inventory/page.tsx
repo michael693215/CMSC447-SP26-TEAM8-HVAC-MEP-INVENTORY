@@ -47,7 +47,7 @@ export default function InventoryPage() {
   function Th({ col, label, center }: { col: SortKey; label: string; center?: boolean }) {
     return (
       <th
-        className={`p-4 border-b cursor-pointer select-none hover:bg-black/5 whitespace-nowrap ${center ? "text-center" : ""}`}
+        className={`p-3 sm:p-4 border-b cursor-pointer select-none hover:bg-black/5 whitespace-nowrap ${center ? "text-center" : ""}`}
         onClick={() => toggleSort(col)}
       >
         {label}
@@ -57,42 +57,42 @@ export default function InventoryPage() {
   }
 
   return (
-    <div className="min-h-screen p-8 text-black">
+    <div className="min-h-screen p-4 sm:p-8 text-black">
       <div className="max-w-6xl mx-auto">
         <Link href="/" className="text-blue-600 hover:underline mb-4 inline-block font-medium">
           ← Back to Main Menu
         </Link>
 
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold uppercase tracking-tight">Inventory Management</h1>
-          <button className="btn-accent px-4 py-2">+ Add New Product</button>
+        <div className="flex flex-wrap justify-between items-center gap-3 mb-6">
+          <h1 className="text-2xl sm:text-3xl font-bold uppercase tracking-tight">Inventory Management</h1>
+          <button className="btn-accent px-4 py-2 shrink-0">+ Add New Product</button>
         </div>
 
         {/* Search bar */}
-        <div className="bg-white p-4 rounded-t-lg border-x border-t border-gray-200">
-          <div className="relative w-full max-w-md">
+        <div className="bg-white p-3 sm:p-4 rounded-t-lg border-x border-t border-gray-200">
+          <div className="relative w-full">
             <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-gray-400">
               🔍
             </span>
             <input
               type="text"
               placeholder="Search by part name or description..."
-              className="input-themed block w-full pl-10 pr-3 py-2 sm:text-sm"
+              className="input-themed block w-full pl-10 pr-3 py-2 text-sm"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
         </div>
 
-        {/* Table */}
-        <div className="bg-white shadow-md rounded-b-lg overflow-hidden border border-gray-200">
-          <table className="w-full text-left border-collapse">
+        {/* Table — horizontally scrollable on small screens */}
+        <div className="bg-white shadow-md rounded-b-lg overflow-x-auto border border-gray-200">
+          <table className="w-full min-w-[600px] text-left border-collapse">
             <thead className="table-header-accent">
               <tr>
                 <Th col="name" label="Product" />
-                <th className="p-4 border-b">Description</th>
+                <th className="p-3 sm:p-4 border-b">Description</th>
                 <Th col="category" label="Category" />
-                <Th col="qty" label="Quantity" center />
+                <Th col="qty" label="Qty" center />
                 <Th col="status" label="Status" />
                 <Th col="deliveries" label="Deliveries" center />
               </tr>
@@ -104,17 +104,17 @@ export default function InventoryPage() {
                     key={item.id}
                     className="hover:bg-blue-50 transition-colors border-b border-gray-100 cursor-pointer"
                   >
-                    <td className="p-4 font-bold">
+                    <td className="p-3 sm:p-4 font-bold">
                       <Link href={`/inventory/${item.id}`} className="hover:underline text-black">
                         {item.name}
                       </Link>
                     </td>
-                    <td className="p-4 text-gray-600 italic text-sm">{item.description}</td>
-                    <td className="p-4 text-sm text-gray-700">{item.category}</td>
-                    <td className="p-4 text-center font-mono">{item.qty}</td>
-                    <td className="p-4">
+                    <td className="p-3 sm:p-4 text-gray-600 italic text-sm">{item.description}</td>
+                    <td className="p-3 sm:p-4 text-sm text-gray-700">{item.category}</td>
+                    <td className="p-3 sm:p-4 text-center font-mono">{item.qty}</td>
+                    <td className="p-3 sm:p-4">
                       <span
-                        className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${
+                        className={`px-2 py-1 rounded text-[10px] font-bold uppercase whitespace-nowrap ${
                           item.status === "Low Stock"
                             ? "bg-red-100 text-red-700"
                             : item.status === "Out of Stock"
@@ -125,10 +125,10 @@ export default function InventoryPage() {
                         {item.status}
                       </span>
                     </td>
-                    <td className="p-4 text-center">
+                    <td className="p-3 sm:p-4 text-center">
                       <Link
                         href={`/inventory/${item.id}`}
-                        className="text-xs bg-blue-200 hover:bg-gray-800 hover:text-white px-3 py-1 rounded border border-black transition font-bold"
+                        className="text-xs bg-blue-200 hover:bg-gray-800 hover:text-white px-3 py-1 rounded border border-black transition font-bold whitespace-nowrap"
                       >
                         View ({item.deliveryIds.length})
                       </Link>

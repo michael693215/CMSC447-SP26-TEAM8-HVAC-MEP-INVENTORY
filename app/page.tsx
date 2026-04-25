@@ -38,31 +38,32 @@ export default function MainMenu() {
       description: "Learn about the use of the app.",
       icon: "⚙️",
     }
-
   ];
 
   return (
-    <div className="flex flex-col items-center justify-start min-h-screen p-6 md:p-12">
+    <div className="flex flex-col items-center justify-start min-h-screen p-4 sm:p-6 md:p-12">
       {/* Header */}
-      <header className="w-full max-w-5xl flex justify-between items-center mb-10">
-        <h1 className="text-4xl font-black text-black">Inventory Management System</h1>
-        <Link href="/login" className="btn-primary">
+      <header className="w-full max-w-5xl flex flex-wrap justify-between items-center gap-3 mb-8 sm:mb-10">
+        <h1 className="text-2xl sm:text-3xl md:text-4xl font-black text-black leading-tight">
+          Inventory Management System
+        </h1>
+        <Link href="/login" className="btn-primary shrink-0">
           Sign Out
         </Link>
       </header>
 
-      {/* 3-column grid */}
-      <div className="grid grid-cols-2 gap-6 w-full max-w-5xl">
+      {/* Grid: 1-col on mobile, 2-col on sm+ */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 w-full max-w-5xl">
         {features.map((feature) => (
           <Link key={feature.path} href={feature.path} className="group">
-            <div className="aspect-square flex flex-col items-center justify-center p-8 bg-blue-200 shadow-lg rounded-2xl border-2 border-black group-hover:border-black transition-all duration-300 cursor-pointer text-center">
-              <div className="text-6xl mb-5 group-hover:scale-110 transition-transform">
+            <div className="flex flex-col items-center justify-center p-6 sm:p-8 bg-blue-200 shadow-lg rounded-2xl border-2 border-black group-hover:border-black transition-all duration-300 cursor-pointer text-center min-h-[10rem] sm:aspect-square">
+              <div className="text-4xl sm:text-6xl mb-3 sm:mb-5 group-hover:scale-110 transition-transform">
                 {feature.icon}
               </div>
-              <h2 className="text-xl font-bold mb-3 text-black uppercase tracking-tight">
+              <h2 className="text-base sm:text-xl font-bold mb-1 sm:mb-3 text-black uppercase tracking-tight">
                 {feature.name}
               </h2>
-              <p className="text-gray-500 text-sm max-w-xs">{feature.description}</p>
+              <p className="text-gray-500 text-xs sm:text-sm max-w-xs">{feature.description}</p>
             </div>
           </Link>
         ))}
