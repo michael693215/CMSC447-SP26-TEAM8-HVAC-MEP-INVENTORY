@@ -45,7 +45,7 @@ export default function ManualEntry() {
         }
 
         // 3. Empty the backpack so it doesn't autofill again on a manual page refresh
-        sessionStorage.removeItem('scannedSlipData');
+        // sessionStorage.removeItem('scannedSlipData');
 
       } catch (error) {
         console.error("Failed to parse scanned data", error);
