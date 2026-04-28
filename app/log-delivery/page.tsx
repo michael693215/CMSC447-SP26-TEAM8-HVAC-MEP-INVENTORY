@@ -63,37 +63,35 @@ function CameraViewer() {
     setCapturedImage(null);
   };
 
-const acceptPhoto = async () => {
-    if (!capturedImage) return;
+  const acceptPhoto = async () => {
+      if (!capturedImage) return;
+      setIsProcessing(true);
 
-    setIsProcessing(true);
+      try {
+        const response = await fetch('/api/process-slip', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ imageBase64: capturedImage }),
+        });
 
-    try {
-      // Send the captured image to your own Next.js backend
-      const response = await fetch('/api/process-slip', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageBase64: capturedImage }),
-      });
+        if (!response.ok) throw new Error("Failed to process image");
 
-      if (!response.ok) {
-        throw new Error("Failed to process image");
+        const extractedData = await response.json();
+        console.log("Textract Results:", extractedData);
+        
+        // 1. Put the JSON into the browser's temporary "backpack"
+        sessionStorage.setItem('scannedSlipData', JSON.stringify(extractedData.data));
+        
+        // 2. Navigate the user to the manual entry page
+        router.push('/manual-entry');
+
+      } catch (err) {
+        console.error("Error processing photo:", err);
+        alert("Failed to extract text. Please try again.");
+      } finally {
+        setIsProcessing(false);
+        stopCamera(); 
       }
-
-      const extractedData = await response.json();
-      
-      console.log("Textract Results:", extractedData);
-      // alert("Text extracted successfully! Check your console.");
-      
-      // Close the camera now that we have our data
-      stopCamera(); 
-
-    } catch (err) {
-      console.error("Error processing photo:", err);
-      alert("Failed to extract text. Please try again.");
-    } finally {
-      setIsProcessing(false);
-    }
   };
 
   return (
@@ -117,7 +115,10 @@ const acceptPhoto = async () => {
             <span className="px-3 text-xs text-gray-400 tracking-wider">OR</span>
             <div className="flex-1 h-px bg-gray-200"></div>
           </div>
-          <button className="w-full h-12 border-2 border-blue-200 text-black font-semibold rounded-lg hover:bg-blue-50 transition">
+          <button 
+            onClick={() => router.push('/manual-entry')}
+            className="w-full h-12 border-2 border-blue-200 text-black font-semibold rounded-lg hover:bg-blue-50 transition"
+          >
             Manual Entry
           </button>
         </div>
@@ -225,7 +226,7 @@ export default function LogDelivery() {
           ← Back to Main Menu
         </Link>
         <header className="w-full max-w-5xl flex justify-between items-center mb-10">
-          <h1 className="text-3xl font-bold">Scan Packing Slip</h1>
+          <h1 className="text-3xl font-bold">SCAN PACKING SLIP</h1>
         </header>
       </div>
       
