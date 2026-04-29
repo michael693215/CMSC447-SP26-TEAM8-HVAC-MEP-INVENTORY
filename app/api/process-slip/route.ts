@@ -16,7 +16,7 @@ export async function POST(request: Request) {
       workflowId: process.env.DOCUPIPE_WORKFLOW_ID 
     };
 
-    // 1. Submit the image (Place the order)
+    // 1. Submit the image to the Workflow
     const docupipeResponse = await fetch("https://app.docupipe.ai/document", {
       method: "POST",
       headers: {
@@ -30,25 +30,28 @@ export async function POST(request: Request) {
       throw new Error("Docupipe upload failed");
     }
 
-    // This is the "receipt" - it only contains the Job ID!
+    // 2. Extract the specific Standardization ID from the workflow response
     const initialData = await docupipeResponse.json();
-    const jobId = initialData.jobId || initialData.id; 
-    console.log("Docupipe Job Started! ID:", jobId);
+    const stdId = initialData.workflowResponse?.standardizeStep?.standardizationIds?.[0];
 
-    // 2. Poll the API (Wait at the window for the food)
+    if (!stdId) {
+       console.error("Workflow Response:", initialData);
+       throw new Error("Could not find a Standardization ID in the workflow response.");
+    }
+    
+    console.log("Standardization Started! ID:", stdId);
+
+    // 3. Poll the /standardization endpoint
     let isProcessing = true;
     let extractedData = null;
     let attempts = 0;
 
-    // We will ask DocuPipe if it is done every 2 seconds, up to 15 times (30 sec max)
-    while (isProcessing && attempts < 15) {
-      await new Promise(resolve => setTimeout(resolve, 2000)); 
+    // Wait up to 60 seconds, but we stop the moment 'data' appears
+    while (isProcessing && attempts < 30) {
+      await new Promise(resolve => setTimeout(resolve, 2000));
       attempts++;
 
-      // NOTE: Because I am an AI, I don't have DocuPipe's exact API docs memorized. 
-      // This is the standard URL for checking a job, but you may need to peek at 
-      // their docs if it is slightly different (e.g., /job/ instead of /jobs/)
-      const checkResponse = await fetch(`https://app.docupipe.ai/jobs/${jobId}`, {
+      const checkResponse = await fetch(`https://app.docupipe.ai/standardization/${stdId}`, {
         method: "GET",
         headers: {
           "X-API-Key": process.env.DOCUPIPE_API_KEY as string,
@@ -57,28 +60,27 @@ export async function POST(request: Request) {
       });
 
       const checkData = await checkResponse.json();
-      console.log(`Poll ${attempts} status:`, checkData.status);
+      console.log(`Poll ${attempts} RAW:`, JSON.stringify(checkData));
 
-      // If the AI is finished extracting...
-      if (checkData.status === "completed" || checkData.status === "success" || checkData.status === "done") {
+      // THE FIX: We stop as soon as DocuPipe returns the 'data' field.
+      // Even if the fields are null/empty, we move to the next page.
+      if (checkData.data) {
         isProcessing = false;
-        
-        // DocuPipe usually nests the final JSON inside a "result", "data", or "output" key.
-        // We use the OR operator (||) to safely grab it wherever they hid it!
-        extractedData = checkData.result || checkData.data || checkData.output || checkData;
-        
-      } else if (checkData.status === "failed" || checkData.status === "error") {
-        throw new Error("Docupipe failed to process the document internally.");
+        extractedData = checkData.data;
+        console.log("Data received. Handing off to frontend...");
       }
+      
+      // If it returns {"detail":"Not Found"}, we just wait 2 seconds and try again.
     }
 
+    // 4. Final verification
     if (!extractedData) {
-      throw new Error("Timeout: DocuPipe took too long to respond.");
+      throw new Error("DocuPipe took too long (over 60 seconds).");
     }
 
     console.log("Final Extracted JSON:", extractedData);
 
-    // 3. FINALLY return the real data back to your frontend!
+    // 5. Return the data to the manual-entry form!
     return NextResponse.json({ success: true, data: extractedData });
 
   } catch (error) {
