@@ -17,8 +17,10 @@ export default function ManualEntry() {
     { id: Date.now(), name: '', quantity: '', specifications: '' }
   ]);
   
-  // NEW: State to toggle between the Form and the Review Screen
   const [isReviewMode, setIsReviewMode] = useState(false);
+  
+  // NEW: State to track where the user came from
+  const [isFromPending, setIsFromPending] = useState(false);
 
   useEffect(() => {
     const scannedData = sessionStorage.getItem('scannedSlipData');
@@ -26,6 +28,7 @@ export default function ManualEntry() {
     
     if (scannedData) {
       try {
+        setIsFromPending(false); // Editable mode
         const parsedData = JSON.parse(scannedData);
         if (parsedData.PO) setPoNumber(parsedData.PO);
         if (parsedData.lineItems && parsedData.lineItems.length > 0) {
@@ -44,6 +47,7 @@ export default function ManualEntry() {
     } 
     else if (tableData) {
       try {
+        setIsFromPending(true); // Locked mode
         const parsedData = JSON.parse(tableData);
         if (parsedData.poNumber) setPoNumber(parsedData.poNumber);
         if (parsedData.items && parsedData.items.length > 0) {
@@ -70,23 +74,16 @@ export default function ManualEntry() {
     setItems(items.map(item => item.id === id ? { ...item, [field]: value } : item));
   };
 
-  // UPDATED: Now this just triggers the review screen
   const handleProceedToReview = (e: React.FormEvent) => {
     e.preventDefault();
     setIsReviewMode(true);
-    window.scrollTo(0, 0); // Scroll to top for the review screen
+    window.scrollTo(0, 0); 
   };
 
-  // NEW: The actual final submission function
   const handleFinalSubmit = () => {
     const formData = { poNumber, items };
-    
-    // TODO: Send `formData` to Supabase here!
     console.log("FINAL SUBMISSION TO DB:", formData);
-    
     alert("Delivery successfully logged!");
-    
-    // Route back to the hub to start a new workflow
     router.push('/log-delivery'); 
   };
 
@@ -94,7 +91,6 @@ export default function ManualEntry() {
     <div className="min-h-screen p-8 text-black bg-white">
       <div className="max-w-4xl mx-auto">
         
-        {/* Dynamic Back Button: Goes to Edit Mode if reviewing, otherwise goes back a page */}
         <button 
           onClick={() => isReviewMode ? setIsReviewMode(false) : router.back()} 
           className="text-blue-600 hover:underline mb-6 inline-block font-medium"
@@ -111,7 +107,7 @@ export default function ManualEntry() {
           </p>
         </header>
 
-        {/* --- VIEW 1: THE EDITABLE FORM --- */}
+        {/* --- VIEW 1: THE FORM --- */}
         {!isReviewMode && (
           <form onSubmit={handleProceedToReview} className="space-y-8">
             <div className="bg-gray-50 p-6 rounded-xl border border-gray-200">
@@ -120,8 +116,13 @@ export default function ManualEntry() {
                 type="text" 
                 value={poNumber}
                 onChange={(e) => setPoNumber(e.target.value)}
+                readOnly={isFromPending}
                 placeholder="e.g. PO-102938"
-                className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                // UPDATED: Dynamically change styling if locked
+                className={`w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition
+                  ${isFromPending 
+                    ? 'bg-gray-100 border-gray-200 text-gray-500 cursor-not-allowed font-medium' 
+                    : 'bg-white border-gray-300 text-gray-900'}`}
                 required
               />
             </div>
@@ -129,13 +130,16 @@ export default function ManualEntry() {
             <div className="bg-gray-50 p-6 rounded-xl border border-gray-200">
               <div className="flex justify-between items-center mb-4">
                 <h2 className="text-xl font-bold">Items Received</h2>
-                <button 
-                  type="button"
-                  onClick={handleAddItem}
-                  className="bg-blue-100 text-blue-700 px-4 py-2 rounded-lg font-semibold hover:bg-blue-200 transition active:scale-95"
-                >
-                  + Add Item
-                </button>
+                {/* UPDATED: Only show Add Item if NOT from pending deliveries */}
+                {!isFromPending && (
+                  <button 
+                    type="button"
+                    onClick={handleAddItem}
+                    className="bg-blue-100 text-blue-700 px-4 py-2 rounded-lg font-semibold hover:bg-blue-200 transition active:scale-95"
+                  >
+                    + Add Item
+                  </button>
+                )}
               </div>
 
               <div className="space-y-6">
@@ -143,7 +147,8 @@ export default function ManualEntry() {
                   <div key={item.id} className="p-4 bg-white border border-gray-200 rounded-lg shadow-sm relative">
                     <div className="flex justify-between items-center mb-3">
                       <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider">Item {index + 1}</h3>
-                      {items.length > 1 && (
+                      {/* UPDATED: Only show Remove Item if NOT from pending deliveries */}
+                      {!isFromPending && items.length > 1 && (
                         <button
                           type="button"
                           onClick={() => handleRemoveItem(item.id)}
@@ -161,13 +166,16 @@ export default function ManualEntry() {
                           type="text" 
                           value={item.name}
                           onChange={(e) => updateItem(item.id, 'name', e.target.value)}
-                          className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          readOnly={isFromPending}
+                          className={`w-full p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 transition
+                            ${isFromPending ? 'bg-gray-50 border-gray-100 text-gray-500 cursor-not-allowed' : 'bg-white border-gray-300'}`}
                           required
                         />
                       </div>
                       
                       <div className="md:col-span-3">
                         <label className="block text-xs font-semibold text-gray-600 mb-1">Quantity</label>
+                        {/* Quantity input remains editable in both modes */}
                         <div className="flex items-center border border-gray-300 rounded-md overflow-hidden bg-white focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500 transition-all">
                           <button
                             type="button"
@@ -180,7 +188,9 @@ export default function ManualEntry() {
                             type="number" 
                             value={item.quantity}
                             onChange={(e) => updateItem(item.id, 'quantity', e.target.value)}
-                            className="w-full p-2 text-center focus:outline-none appearance-none"
+                            // NEW: Selects the entire number when the user clicks the box
+                            onFocus={(e) => e.target.select()}
+                            className="w-full p-2 text-center focus:outline-none appearance-none bg-transparent font-bold text-gray-900"
                             style={{ MozAppearance: 'textfield' }}
                             required
                           />
@@ -200,7 +210,9 @@ export default function ManualEntry() {
                           type="text" 
                           value={item.specifications}
                           onChange={(e) => updateItem(item.id, 'specifications', e.target.value)}
-                          className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          readOnly={isFromPending}
+                          className={`w-full p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 transition
+                            ${isFromPending ? 'bg-gray-50 border-gray-100 text-gray-500 cursor-not-allowed' : 'bg-white border-gray-300'}`}
                         />
                       </div>
                     </div>
@@ -209,7 +221,6 @@ export default function ManualEntry() {
               </div>
             </div>
 
-            {/* RENAMED BUTTON */}
             <button 
               type="submit"
               className="w-full bg-blue-600 text-white font-bold text-lg py-4 rounded-xl hover:bg-blue-700 active:scale-[0.99] transition shadow-md"
@@ -222,15 +233,18 @@ export default function ManualEntry() {
         {/* --- VIEW 2: THE RECEIPT/CONFIRMATION SCREEN --- */}
         {isReviewMode && (
           <div className="space-y-6">
-            
-            {/* Summary Card */}
             <div className="bg-white border-2 border-gray-200 rounded-xl overflow-hidden shadow-sm">
               <div className="bg-gray-50 p-6 border-b border-gray-200 flex justify-between items-center">
                 <div>
                   <p className="text-sm text-gray-500 font-bold uppercase tracking-wider mb-1">Purchase Order</p>
                   <p className="text-2xl font-bold text-gray-900">{poNumber}</p>
                 </div>
-
+                <button 
+                  onClick={() => setIsReviewMode(false)}
+                  className="text-blue-600 text-sm font-semibold hover:underline"
+                >
+                  Edit PO
+                </button>
               </div>
               
               <div className="p-0">
@@ -255,7 +269,6 @@ export default function ManualEntry() {
               </div>
             </div>
 
-            {/* Action Buttons */}
             <div className="flex flex-col sm:flex-row gap-4 pt-4">
               <button 
                 onClick={() => setIsReviewMode(false)}
