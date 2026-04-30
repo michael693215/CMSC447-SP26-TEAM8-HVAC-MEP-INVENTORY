@@ -1,92 +1,112 @@
 // File: app/api/process-slip/route.ts
 import { NextResponse } from 'next/server';
 
-export async function POST(request: Request) {
-  try {
-    const { imageBase64 } = await request.json();
-    const base64Data = imageBase64.split(',')[1];
+// Helper function to process a single image through the workflow
+async function processSingleImage(base64Data: string) {
+  const payload = {
+    document: { file: { contents: base64Data, filename: "packing_slip" } },
+    workflowId: process.env.DOCUPIPE_WORKFLOW_ID 
+  };
 
-    const payload = {
-      document: {
-        file: {
-          contents: base64Data,   
-          filename: "packing_slip" 
-        }
-      },
-      workflowId: process.env.DOCUPIPE_WORKFLOW_ID 
-    };
+  // 1. Submit image
+  const docupipeResponse = await fetch("https://app.docupipe.ai/document", {
+    method: "POST",
+    headers: {
+      "X-API-Key": process.env.DOCUPIPE_API_KEY as string, 
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
 
-    // 1. Submit the image to the Workflow
-    const docupipeResponse = await fetch("https://app.docupipe.ai/document", {
-      method: "POST",
+  if (!docupipeResponse.ok) throw new Error("Docupipe upload failed");
+
+  // 2. Get ID
+  const initialData = await docupipeResponse.json();
+  const stdId = initialData.workflowResponse?.standardizeStep?.standardizationIds?.[0];
+
+  if (!stdId) throw new Error("Could not find a Standardization ID");
+
+  // 3. Poll
+  let isProcessing = true;
+  let extractedData = null;
+  let attempts = 0;
+
+  while (isProcessing && attempts < 30) {
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    attempts++;
+
+    const checkResponse = await fetch(`https://app.docupipe.ai/standardization/${stdId}`, {
+      method: "GET",
       headers: {
-        "X-API-Key": process.env.DOCUPIPE_API_KEY as string, 
+        "X-API-Key": process.env.DOCUPIPE_API_KEY as string,
         "Content-Type": "application/json"
-      },
-      body: JSON.stringify(payload)
+      }
     });
 
-    if (!docupipeResponse.ok) {
-      throw new Error("Docupipe upload failed");
-    }
+    const checkData = await checkResponse.json();
 
-    // 2. Extract the specific Standardization ID from the workflow response
-    const initialData = await docupipeResponse.json();
-    const stdId = initialData.workflowResponse?.standardizeStep?.standardizationIds?.[0];
-
-    if (!stdId) {
-       console.error("Workflow Response:", initialData);
-       throw new Error("Could not find a Standardization ID in the workflow response.");
+    if (checkData.data) {
+      isProcessing = false;
+      extractedData = checkData.data;
     }
+  }
+
+  return extractedData;
+}
+
+export async function POST(request: Request) {
+  try {
+    const { imagesBase64, imageBase64 } = await request.json();
     
-    console.log("Standardization Started! ID:", stdId);
+    // Support the new array format, but keep fallback just in case
+    const images = imagesBase64 || (imageBase64 ? [imageBase64] : []);
+    
+    if (images.length === 0) {
+      throw new Error("No images provided");
+    }
 
-    // 3. Poll the /standardization endpoint
-    let isProcessing = true;
-    let extractedData = null;
-    let attempts = 0;
+    console.log(`Processing ${images.length} pages in parallel...`);
 
-    // Wait up to 60 seconds, but we stop the moment 'data' appears
-    while (isProcessing && attempts < 30) {
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      attempts++;
-
-      const checkResponse = await fetch(`https://app.docupipe.ai/standardization/${stdId}`, {
-        method: "GET",
-        headers: {
-          "X-API-Key": process.env.DOCUPIPE_API_KEY as string,
-          "Content-Type": "application/json"
+    // 4. Run all images through DocuPipe at the same time
+    const results = await Promise.all(
+      images.map(async (img: string) => {
+        try {
+          const b64 = img.split(',')[1] || img;
+          return await processSingleImage(b64);
+        } catch (err) {
+          console.error("Failed on one page, skipping...", err);
+          return null; // If one page is blurry and fails, don't crash the whole batch
         }
-      });
+      })
+    );
 
-      const checkData = await checkResponse.json();
-      console.log(`Poll ${attempts} RAW:`, JSON.stringify(checkData));
+    // 5. Stitch the results together
+    const masterData = {
+      PO: null as string | null,
+      lineItems: [] as any[]
+    };
 
-      // THE FIX: We stop as soon as DocuPipe returns the 'data' field.
-      // Even if the fields are null/empty, we move to the next page.
-      if (checkData.data) {
-        isProcessing = false;
-        extractedData = checkData.data;
-        console.log("Data received. Handing off to frontend...");
+    results.forEach(res => {
+      if (res) {
+        // Grab the PO from whichever page has it first
+        if (res.PO && !masterData.PO) {
+          masterData.PO = res.PO;
+        }
+        // Combine all items into one big array
+        if (res.lineItems && res.lineItems.length > 0) {
+          masterData.lineItems = [...masterData.lineItems, ...res.lineItems];
+        }
       }
-      
-      // If it returns {"detail":"Not Found"}, we just wait 2 seconds and try again.
-    }
+    });
 
-    // 4. Final verification
-    if (!extractedData) {
-      throw new Error("DocuPipe took too long (over 60 seconds).");
-    }
+    console.log("Final Combined JSON:", masterData);
 
-    console.log("Final Extracted JSON:", extractedData);
-
-    // 5. Return the data to the manual-entry form!
-    return NextResponse.json({ success: true, data: extractedData });
+    return NextResponse.json({ success: true, data: masterData });
 
   } catch (error) {
     console.error("Extraction Error:", error);
     return NextResponse.json(
-      { success: false, error: "Failed to process document" },
+      { success: false, error: "Failed to process documents" },
       { status: 500 }
     );
   }
