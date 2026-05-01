@@ -1,13 +1,13 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { getProductById, getDeliveriesForProduct } from "../../lib/data";
-import type { DeliveryStatus } from "../../lib/data";
+import { getProductById, getPurchaseOrdersForProduct } from "../../lib/data";
+import type { PurchaseOrderStatus } from "../../lib/data";
 
-const STATUS_STYLES: Record<DeliveryStatus, string> = {
-  Delivered: "bg-green-100 text-green-700",
+const PO_STATUS_STYLES: Record<PurchaseOrderStatus, string> = {
+  Received: "bg-green-100 text-green-700",
   "In Transit": "bg-blue-100 text-blue-700",
   Pending: "bg-yellow-100 text-yellow-700",
 };
@@ -16,7 +16,9 @@ export default function ProductDetailPage() {
   const params = useParams();
   const id = Number(params.id);
   const product = getProductById(id);
-  const productDeliveries = getDeliveriesForProduct(id);
+  const allPOs = getPurchaseOrdersForProduct(id);
+
+  const [statusFilter, setStatusFilter] = useState<PurchaseOrderStatus | "All">("All");
 
   if (!product) {
     return (
@@ -29,13 +31,18 @@ export default function ProductDetailPage() {
     );
   }
 
-  const totalReceived = productDeliveries
-    .filter((d) => d.status === "Delivered")
-    .reduce((sum, d) => sum + d.qty, 0);
+  const inStock = product.qty;
+  const receiving = allPOs
+    .filter((po) => po.status === "Pending" || po.status === "In Transit")
+    .reduce((sum, po) => {
+      const item = po.items.find((i) => i.productId === id);
+      return sum + (item?.qty ?? 0);
+    }, 0);
+  const total = inStock + receiving;
 
-  const totalPending = productDeliveries
-    .filter((d) => d.status !== "Delivered")
-    .reduce((sum, d) => sum + d.qty, 0);
+  const filteredPOs = statusFilter === "All"
+    ? allPOs
+    : allPOs.filter((po) => po.status === statusFilter);
 
   return (
     <div className="min-h-screen p-4 sm:p-8 text-black">
@@ -65,73 +72,94 @@ export default function ProductDetailPage() {
         {/* Stats row */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-6 sm:mb-8">
           <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5 shadow-sm text-center">
-            <p className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">Current Stock</p>
-            <p className="text-4xl sm:text-5xl font-black">{product.qty}</p>
+            <p className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">In Stock</p>
+            <p className="text-4xl sm:text-5xl font-black">{inStock}</p>
             <p className="text-xs text-gray-500 mt-1">units</p>
           </div>
           <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5 shadow-sm text-center">
-            <p className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">Total Received</p>
-            <p className="text-4xl sm:text-5xl font-black text-green-700">{totalReceived}</p>
-            <p className="text-xs text-gray-500 mt-1">units delivered</p>
+            <p className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">Receiving</p>
+            <p className="text-4xl sm:text-5xl font-black text-yellow-600">{receiving}</p>
+            <p className="text-xs text-gray-500 mt-1">units on order</p>
           </div>
           <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5 shadow-sm text-center">
-            <p className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">Incoming</p>
-            <p className="text-4xl sm:text-5xl font-black text-yellow-600">{totalPending}</p>
-            <p className="text-xs text-gray-500 mt-1">units pending / in transit</p>
+            <p className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">Total</p>
+            <p className="text-4xl sm:text-5xl font-black text-blue-700">{total}</p>
+            <p className="text-xs text-gray-500 mt-1">in stock + receiving</p>
           </div>
         </div>
 
-        {/* Deliveries table header */}
+        {/* Purchase orders table header */}
         <div className="mb-4 flex flex-wrap justify-between items-center gap-3">
-          <h2 className="text-lg sm:text-xl font-bold uppercase tracking-tight">Associated Deliveries</h2>
-          <Link href="/purchase-order" className="btn-accent px-4 py-2 text-sm shrink-0">
-            + New Purchase Order
-          </Link>
+          <h2 className="text-lg sm:text-xl font-bold uppercase tracking-tight">Associated Purchase Orders</h2>
+          <div className="flex items-center gap-2">
+            <label className="text-xs font-bold uppercase tracking-wider text-gray-500">Status</label>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as PurchaseOrderStatus | "All")}
+              className="input-themed text-sm px-2 py-1"
+            >
+              <option value="All">All</option>
+              <option value="Pending">Pending</option>
+              <option value="In Transit">In Transit</option>
+              <option value="Received">Received</option>
+            </select>
+          </div>
         </div>
 
-        {productDeliveries.length > 0 ? (
+        {allPOs.length > 0 ? (
           <div className="bg-white shadow-md rounded-lg overflow-x-auto border border-gray-200">
             <table className="w-full min-w-[600px] text-left border-collapse">
               <thead className="table-header-accent">
                 <tr>
-                  <th className="p-3 sm:p-4 border-b sticky left-0 z-20 bg-blue-200">Delivery ID</th>
-                  <th className="p-3 sm:p-4 border-b">Date</th>
+                  <th className="p-3 sm:p-4 border-b sticky left-0 z-20 bg-blue-200">PO #</th>
+                  <th className="p-3 sm:p-4 border-b">Order Date</th>
+                  <th className="p-3 sm:p-4 border-b">Expected</th>
                   <th className="p-3 sm:p-4 border-b text-center">Qty</th>
-                  <th className="p-3 sm:p-4 border-b">PO #</th>
                   <th className="p-3 sm:p-4 border-b">Supplier</th>
-                  <th className="p-3 sm:p-4 border-b">Signed By</th>
+                  <th className="p-3 sm:p-4 border-b">Ordered By</th>
                   <th className="p-3 sm:p-4 border-b text-center">Status</th>
                 </tr>
               </thead>
               <tbody>
-                {productDeliveries.map((d) => (
-                  <tr key={d.id} className="hover:bg-blue-50 transition-colors border-b border-gray-100">
-                    <td className="p-3 sm:p-4 font-mono font-bold text-sm sticky left-0 z-10 bg-white shadow-[1px_0_0_#e5e7eb]">{d.id}</td>
-                    <td className="p-3 sm:p-4 text-sm whitespace-nowrap">{d.date}</td>
-                    <td className="p-3 sm:p-4 text-center font-mono">{d.qty}</td>
-                    <td className="p-3 sm:p-4 font-mono text-sm">{d.po}</td>
-                    <td className="p-3 sm:p-4 text-sm text-gray-700">{d.supplier}</td>
+                {filteredPOs.length > 0 ? filteredPOs.map((po) => {
+                  const itemQty = po.items.find((i) => i.productId === id)?.qty ?? 0;
+                  return (
+                  <tr key={po.id} className="hover:bg-blue-50 transition-colors border-b border-gray-100">
+                    <td className="p-3 sm:p-4 font-mono font-bold text-sm sticky left-0 z-10 bg-white shadow-[1px_0_0_#e5e7eb]">
+                      <Link href={`/purchase-orders/${po.id}`} className="hover:underline text-blue-700">{po.id}</Link>
+                    </td>
+                    <td className="p-3 sm:p-4 text-sm whitespace-nowrap">{po.date}</td>
+                    <td className="p-3 sm:p-4 text-sm whitespace-nowrap">{po.expectedDate}</td>
+                    <td className="p-3 sm:p-4 text-center font-mono">{itemQty}</td>
+                    <td className="p-3 sm:p-4 text-sm text-gray-700">{po.supplier}</td>
                     <td className="p-3 sm:p-4 text-sm text-gray-600">
-                      {d.signedBy || <span className="italic text-gray-400">—</span>}
+                      {po.orderedBy || <span className="italic text-gray-400">—</span>}
                     </td>
                     <td className="p-3 sm:p-4 text-center">
-                      <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase whitespace-nowrap ${STATUS_STYLES[d.status]}`}>
-                        {d.status}
+                      <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase whitespace-nowrap ${PO_STATUS_STYLES[po.status]}`}>
+                        {po.status}
                       </span>
                     </td>
                   </tr>
-                ))}
+                  );
+                }) : (
+                  <tr>
+                    <td colSpan={7} className="p-8 text-center text-gray-500 italic">
+                      No purchase orders match the selected filter.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
 
-            {productDeliveries.some((d) => d.notes) && (
+            {allPOs.some((po) => po.notes) && (
               <div className="p-4 border-t border-gray-200">
                 <p className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">Notes</p>
-                {productDeliveries
-                  .filter((d) => d.notes)
-                  .map((d) => (
-                    <p key={d.id} className="text-sm text-gray-700">
-                      <span className="font-mono font-bold">{d.id}</span>: {d.notes}
+                {allPOs
+                  .filter((po) => po.notes)
+                  .map((po) => (
+                    <p key={po.id} className="text-sm text-gray-700">
+                      <span className="font-mono font-bold">{po.id}</span>: {po.notes}
                     </p>
                   ))}
               </div>
@@ -139,7 +167,7 @@ export default function ProductDetailPage() {
           </div>
         ) : (
           <div className="bg-white rounded-lg border border-gray-200 p-10 text-center text-gray-500 italic">
-            No deliveries recorded for this product.
+            No purchase orders recorded for this product.
           </div>
         )}
       </div>

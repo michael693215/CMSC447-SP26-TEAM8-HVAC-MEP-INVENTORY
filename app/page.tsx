@@ -57,9 +57,9 @@ export default function MainMenu() {
       icon: "delivery-history",
     },
     {
-      name: "Add Purchase Order",
-      path: "/purchase-order",
-      description: "Create a new purchase order for stock.",
+      name: "Purchase Orders",
+      path: "/purchase-orders",
+      description: "View and manage all purchase orders.",
       icon: "purchase-order",
     },
     {

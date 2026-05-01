@@ -91,9 +91,6 @@ export default function DeliveryHistoryPage() {
 
         <div className="flex flex-wrap justify-between items-center gap-3 mb-6">
           <h1 className="text-2xl sm:text-3xl font-bold uppercase tracking-tight">Delivery History</h1>
-          <Link href="/purchase-order" className="btn-primary shrink-0">
-            + New Purchase Order
-          </Link>
         </div>
 
         {/* Search + Filter bar */}
