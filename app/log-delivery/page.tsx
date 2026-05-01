@@ -23,9 +23,11 @@ export default function LogDeliveryHub() {
   };
 
   const handleMaterialsRequest = () => {
-    // Placeholder for future development
-    alert("Materials Request workflow coming soon!");
-  };
+      // Save the location to the backpack
+      sessionStorage.setItem('deliveryLocation', location);
+      // Route to the new pending requests table
+      router.push('/pending-requests'); 
+    };
 
   return (
     <div className="min-h-screen p-8 text-black bg-white">
