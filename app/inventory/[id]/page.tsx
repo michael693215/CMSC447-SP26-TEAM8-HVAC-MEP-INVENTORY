@@ -70,20 +70,20 @@ export default function ProductDetailPage() {
         </div>
 
         {/* Stats row */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-6 sm:mb-8">
-          <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5 shadow-sm text-center">
+        <div className="grid grid-cols-3 gap-4 mb-8">
+          <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm text-center">
             <p className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">In Stock</p>
-            <p className="text-4xl sm:text-5xl font-black">{inStock}</p>
+            <p className="text-5xl font-black">{inStock}</p>
             <p className="text-xs text-gray-500 mt-1">units</p>
           </div>
-          <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5 shadow-sm text-center">
+          <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm text-center">
             <p className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">Receiving</p>
-            <p className="text-4xl sm:text-5xl font-black text-yellow-600">{receiving}</p>
+            <p className="text-5xl font-black text-yellow-600">{receiving}</p>
             <p className="text-xs text-gray-500 mt-1">units on order</p>
           </div>
           <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5 shadow-sm text-center">
             <p className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">Total</p>
-            <p className="text-4xl sm:text-5xl font-black text-blue-700">{total}</p>
+            <p className="text-5xl font-black text-blue-700">{total}</p>
             <p className="text-xs text-gray-500 mt-1">in stock + receiving</p>
           </div>
         </div>
