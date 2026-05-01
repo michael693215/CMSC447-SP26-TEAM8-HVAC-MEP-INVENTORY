@@ -1,4 +1,5 @@
 export type DeliveryStatus = "Delivered" | "In Transit" | "Pending";
+export type PurchaseOrderStatus = "Pending" | "In Transit" | "Received";
 
 export interface Delivery {
   id: string;
@@ -22,6 +23,79 @@ export interface Product {
   category: string;
   deliveryIds: string[];
 }
+
+export interface POLineItem {
+  productId: number;
+  productName: string;
+  qty: number;
+}
+
+export interface PurchaseOrder {
+  id: string;
+  date: string;
+  expectedDate: string;
+  items: POLineItem[];
+  status: PurchaseOrderStatus;
+  supplier: string;
+  orderedBy: string;
+  notes: string;
+}
+
+export const purchaseOrders: PurchaseOrder[] = [
+  {
+    id: "PO-001",
+    date: "Mar 10, 2026",
+    expectedDate: "Mar 15, 2026",
+    items: [{ productId: 1, productName: "Filter 16x25x1", qty: 20 }],
+    status: "Received",
+    supplier: "Miller Residential HVAC",
+    orderedBy: "J. Miller",
+    notes: "Standard spring restock",
+  },
+  {
+    id: "PO-002",
+    date: "Mar 28, 2026",
+    expectedDate: "May 01, 2026",
+    items: [
+      { productId: 1, productName: "Filter 16x25x1", qty: 25 },
+      { productId: 2, productName: "Capacitor 45/5 MFD", qty: 8 },
+    ],
+    status: "Pending",
+    supplier: "Miller Residential HVAC",
+    orderedBy: "",
+    notes: "Awaiting warehouse confirmation",
+  },
+  {
+    id: "PO-003",
+    date: "Mar 15, 2026",
+    expectedDate: "Mar 20, 2026",
+    items: [{ productId: 2, productName: "Capacitor 45/5 MFD", qty: 12 }],
+    status: "Received",
+    supplier: "Davis Parts & Supply",
+    orderedBy: "R. Davis",
+    notes: "",
+  },
+  {
+    id: "PO-004",
+    date: "Feb 05, 2026",
+    expectedDate: "Feb 10, 2026",
+    items: [{ productId: 3, productName: "Thermostat T6 Pro", qty: 5 }],
+    status: "Received",
+    supplier: "City Property Mgmt",
+    orderedBy: "S. Chen",
+    notes: "Priority order",
+  },
+  {
+    id: "PO-005",
+    date: "Mar 18, 2026",
+    expectedDate: "Apr 05, 2026",
+    items: [{ productId: 3, productName: "Thermostat T6 Pro", qty: 3 }],
+    status: "In Transit",
+    supplier: "City Property Mgmt",
+    orderedBy: "",
+    notes: "Estimated arrival Apr 5",
+  },
+];
 
 export const deliveries: Delivery[] = [
   {
@@ -122,4 +196,12 @@ export function getProductById(id: number): Product | undefined {
 
 export function getDeliveriesForProduct(productId: number): Delivery[] {
   return deliveries.filter((d) => d.productId === productId);
+}
+
+export function getPurchaseOrderById(id: string): PurchaseOrder | undefined {
+  return purchaseOrders.find((po) => po.id === id);
+}
+
+export function getPurchaseOrdersForProduct(productId: number): PurchaseOrder[] {
+  return purchaseOrders.filter((po) => po.items.some((item) => item.productId === productId));
 }

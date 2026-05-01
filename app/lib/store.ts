@@ -1,4 +1,4 @@
-import { deliveries as seedDeliveries, products, type Delivery } from "./data";
+import { deliveries as seedDeliveries, purchaseOrders as seedPurchaseOrders, products, type Delivery, type PurchaseOrder } from "./data";
 
 const STORAGE_KEY = "hvac_deliveries";
 
@@ -53,4 +53,43 @@ export function formatDeliveryDate(isoDate: string): string {
   const d = new Date(isoDate);
   if (isNaN(d.getTime())) return isoDate;
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+const PO_STORAGE_KEY = "hvac_purchase_orders";
+
+function loadAddedPOs(): PurchaseOrder[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(PO_STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as PurchaseOrder[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveAddedPOs(pos: PurchaseOrder[]) {
+  localStorage.setItem(PO_STORAGE_KEY, JSON.stringify(pos));
+}
+
+export function getAllPurchaseOrders(): PurchaseOrder[] {
+  return [...seedPurchaseOrders, ...loadAddedPOs()];
+}
+
+export function addPurchaseOrder(po: PurchaseOrder) {
+  const current = loadAddedPOs();
+  current.push(po);
+  saveAddedPOs(current);
+}
+
+export function findPurchaseOrderById(id: string): PurchaseOrder | undefined {
+  return getAllPurchaseOrders().find((po) => po.id === id);
+}
+
+export function generatePOId(): string {
+  const allIds = getAllPurchaseOrders().map((po) => {
+    const m = po.id.match(/\d+/);
+    return m ? parseInt(m[0], 10) : 0;
+  });
+  const next = Math.max(0, ...allIds) + 1;
+  return `PO-${String(next).padStart(3, "0")}`;
 }
