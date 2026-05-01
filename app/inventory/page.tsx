@@ -140,7 +140,7 @@ export default function InventoryPage() {
   function Th({ col, label, center, sticky }: { col: SortKey; label: string; center?: boolean; sticky?: boolean }) {
     return (
       <th
-        className={`p-3 sm:p-4 border-b cursor-pointer select-none hover:bg-black/5 whitespace-nowrap ${center ? "text-center" : ""} ${sticky ? "sticky left-0 z-20 bg-blue-200" : ""}`}
+        className={`p-3 sm:p-4 border-b cursor-pointer select-none whitespace-nowrap ${center ? "text-center" : ""} ${sticky ? "sticky left-0 z-20 bg-blue-200 hover:bg-blue-300" : "hover:bg-black/5"}`}
         onClick={() => toggleSort(col)}
       >
         {label}
@@ -202,7 +202,7 @@ export default function InventoryPage() {
               {sorted.length > 0 ? (
                 sorted.map((item) => (
                   <tr key={item.id} className="hover:bg-blue-50 transition-colors border-b border-gray-100 cursor-pointer">
-                    <td className="p-3 sm:p-4 font-bold sticky left-0 z-10 bg-white shadow-[1px_0_0_#e5e7eb]">
+                    <td className="p-3 sm:p-4 border-b border-gray-100 font-bold whitespace-nowrap sticky left-0 z-10 bg-white shadow-[1px_0_0_#e5e7eb]">
                       <Link href={`/inventory/${item.id}`} className="hover:underline text-black">
                         {item.name}
                       </Link>
