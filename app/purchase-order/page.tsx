@@ -2,30 +2,33 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import Link from "next/link";
-import { addPurchaseOrder, generatePOId, formatDeliveryDate } from "../lib/store";
+import { addPurchaseOrder, generatePOId, formatDeliveryDate, getAllLocations, addLocation } from "../lib/store";
+import type { Location } from "../lib/data";
 
 interface LineItem {
   productName: string;
   qty: string;
+  specs: string;
+  showSpecs: boolean;
 }
 
 interface POForm {
   poNumber: string;
-  recipient: string;
-  expectedDate: string;
-  orderedBy: string;
-  notes: string;
+  date: string;
+  location: string;
+  newLocation: string;
 }
 
 const EMPTY_FORM: POForm = {
   poNumber: "",
-  recipient: "",
-  expectedDate: "",
-  orderedBy: "",
-  notes: "",
+  date: "",
+  location: "",
+  newLocation: "",
 };
 
-const EMPTY_ITEM: LineItem = { productName: "", qty: "" };
+const EMPTY_ITEM: LineItem = { productName: "", qty: "", specs: "", showSpecs: false };
+
+const ADD_NEW_VALUE = "__new__";
 
 const SKIP_WORDS = new Set([
   "total", "subtotal", "tax", "shipping", "discount", "page",
@@ -34,8 +37,6 @@ const SKIP_WORDS = new Set([
 
 function extractPONumber(text: string): string | null {
   const patterns = [
-    // Table format "P.O. NUMBER  115493" (column gap) or colon/dash separator.
-    // Negative lookahead prevents matching "P.O. Box 72230" mailing addresses.
     /P\.?\s*O\.?\s*(?:NUMBER|Number|No\.?|#|Num\.?)?\s*(?:[:\-]\s*|\s{2,})(?!Box\b)([A-Z]{0,3}[-\s]?\d{3,})/i,
     /Purchase\s+Order\s*(?:Number|No\.?|#)?\s*[:\-]?\s*([A-Z]{0,4}[\-\s]?\d{3,})/i,
     /\b(PO[\-\s]\d{3,})\b/i,
@@ -53,7 +54,6 @@ function extractPONumber(text: string): string | null {
 
 function extractDate(text: string): string | null {
   const patterns = [
-    // Label + column gap or colon
     /(?:Order\s+Date|PO\s+Date|Issue\s+Date|Date\s+Issued|DATE)\s*(?:[:\-]\s*|\s{2,})(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})/i,
     /(?:Order\s+Date|PO\s+Date|Issue\s+Date|Date\s+Issued|DATE)\s*(?:[:\-]\s*|\s{2,})(\w+\.?\s+\d{1,2},?\s+\d{4})/i,
     /(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4})/,
@@ -84,56 +84,22 @@ function dateToISO(dateStr: string): string | null {
   return null;
 }
 
-function extractRecipient(text: string): string | null {
-  const lines = text.split("\n");
-  // Quote table: "Customer  Attention  ..." header → next line has customer in first column
-  for (let i = 0; i < lines.length - 1; i++) {
-    if (/\bCustomer\b/.test(lines[i]) && /\bAttention\b/i.test(lines[i])) {
-      const dataLine = lines[i + 1]?.trim() ?? "";
-      if (!dataLine) continue;
-      const firstCol = dataLine.split(/  +/)[0].trim();
-      if (!firstCol || firstCol.length < 3) continue;
-      let name = firstCol;
-      // Check if the line after is a continuation (no column gaps, starts with capital)
-      const nextLine = lines[i + 2]?.trim() ?? "";
-      if (nextLine && !/  /.test(nextLine) && /^[A-Z(]/.test(nextLine)) {
-        name = name + " " + nextLine;
-      }
-      return name;
-    }
-  }
-  // Fallback patterns
-  const fallbackPatterns = [
-    /(?:Bill\s+To|Recipient|Buyer|Client)\s*[:\-]?\s*([A-Za-z][^\n]{4,80})/i,
-    /(?:Vendor|Supplier|Sold\s+By|Manufacturer)\s*[:\-]\s*([^\n]{2,80})/i,
-  ];
-  for (const pat of fallbackPatterns) {
-    const m = text.match(pat);
-    if (m) {
-      const val = m[1].trim().replace(/,$/, "").trim();
-      if (val && val.length >= 2) return val;
-    }
-  }
-  return null;
+function isValidDesc(s: string): boolean {
+  if (!s || s.length < 12) return false;
+  const lower = s.toLowerCase();
+  if (SKIP_WORDS.has(lower)) return false;
+  if (/^[A-Z]{2,}$/.test(s)) return false;
+  if (/^(p\.?o\.?|date|terms|job\b|ship|f\.o\.b|change\s+order|bid|uom)\b/i.test(s)) return false;
+  if (/^[A-Z][a-z]{2,}\w*\s+[a-z]/.test(s)) return false;
+  if (/^[-•*•]/.test(s)) return false;
+  if (/^Includes\b/i.test(s)) return false;
+  return true;
 }
 
 function extractItems(text: string): { product_name: string; qty: number }[] {
   const items: { product_name: string; qty: number }[] = [];
   const seen = new Set<string>();
 
-  function isValidDesc(s: string): boolean {
-    if (!s || s.length < 12) return false;
-    const lower = s.toLowerCase();
-    if (SKIP_WORDS.has(lower)) return false;
-    if (/^[A-Z]{2,}$/.test(s)) return false; // all-caps single word → table header
-    if (/^(p\.?o\.?|date|terms|job\b|ship|f\.o\.b|change\s+order|bid|uom)\b/i.test(s)) return false;
-    if (/^[A-Z][a-z]{2,}\w*\s+[a-z]/.test(s)) return false; // CamelCase tag + lowercase fragment
-    if (/^[-•*•]/.test(s)) return false;  // bullet / sub-item
-    if (/^Includes\b/i.test(s)) return false;  // "Includes: …" sub-header, not a product
-    return true;
-  }
-
-  // Strip trailing spec text after colon+digit: "ABB Standard Warranty: 30 months…" → "ABB Standard Warranty"
   function cleanDesc(s: string): string {
     const m = s.match(/^(.{8,}?):\s*\d/);
     return m ? m[1].trim() : s;
@@ -146,7 +112,6 @@ function extractItems(text: string): { product_name: string; qty: number }[] {
     items.push({ product_name: desc, qty: rawQty });
   }
 
-  // Search nearby lines for a valid product description
   function findNearbyDesc(linesArr: string[], i: number): string {
     for (const j of [i - 1, i + 1, i - 2, i + 2, i - 3, i + 3]) {
       if (j < 0 || j >= linesArr.length) continue;
@@ -156,32 +121,25 @@ function extractItems(text: string): { product_name: string; qty: number }[] {
     return "";
   }
 
-  // Format 1: "Some Description  qty" — qty at right end of line
   const rightQtyRe = /^(.{5,80}?)\s{2,}(\d+)\s*(?:ea|pc|pcs|units?|each)?\s*$/gim;
   for (const m of text.matchAll(rightQtyRe)) {
     tryAdd(m[1], parseInt(m[2], 10));
   }
 
-  // Formats 2/3: qty at left (quote/order tables)
   const linesArr = text.split("\n");
   for (let i = 0; i < linesArr.length; i++) {
     const line = linesArr[i];
 
-    // "N  [tag?]  description" on one line
     const leftMatch = line.match(/^[ \t]*(\d{1,4})[ \t]{2,}([A-Z][^\n]{3,})$/);
     if (leftMatch) {
       const qty = parseInt(leftMatch[1], 10);
       if (qty <= 0 || qty > 9999) continue;
       let desc = leftMatch[2].trim();
 
-      // Strip leading single-word tag if followed by 2+ spaces + uppercase desc
-      // e.g. "Warranty  ABB Standard Warranty: …"
       const tagDesc = desc.match(/^([A-Z][a-z]\w+)[ \t]{2,}([A-Z][^\n]{12,})/);
       if (tagDesc) {
         desc = tagDesc[2].trim();
       } else {
-        // Tag + lowercase continuation = wrapped cell; real desc is on a previous line
-        // e.g. "Warranty  during standard working hours included."
         const tagFrag = desc.match(/^[A-Z][a-z]\w+[ \t]+[a-z]/);
         if (tagFrag) {
           const resolved = findNearbyDesc(linesArr, i);
@@ -191,8 +149,6 @@ function extractItems(text: string): { product_name: string; qty: number }[] {
         }
       }
 
-      // If desc is invalid (e.g. "Includes:- NEMA 1 Enclosure", short tag word, etc.)
-      // search surrounding lines for the real product description
       if (!isValidDesc(desc)) {
         const resolved = findNearbyDesc(linesArr, i);
         if (resolved) tryAdd(resolved, qty);
@@ -202,7 +158,6 @@ function extractItems(text: string): { product_name: string; qty: number }[] {
       continue;
     }
 
-    // Standalone qty line — search surrounding lines for description
     const soloQty = line.trim().match(/^(\d{1,4})[ \t]*$/);
     if (soloQty) {
       const qty = parseInt(soloQty[1], 10);
@@ -213,6 +168,47 @@ function extractItems(text: string): { product_name: string; qty: number }[] {
   }
 
   return items;
+}
+
+function extractSpecs(text: string, productName: string): string {
+  const lines = text.split("\n");
+  const searchKey = productName.substring(0, Math.min(productName.length, 30));
+  let productLineIdx = -1;
+
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].includes(searchKey)) {
+      productLineIdx = i;
+      break;
+    }
+  }
+
+  if (productLineIdx === -1) return "";
+
+  const specParts: string[] = [];
+  for (let i = productLineIdx + 1; i < Math.min(productLineIdx + 10, lines.length); i++) {
+    const line = lines[i].trim();
+    if (!line) {
+      if (specParts.length > 0) break;
+      continue;
+    }
+    // Stop at a new product line (qty at start or right-aligned)
+    if (/^[ \t]*\d{1,4}[ \t]{2,}[A-Z]/.test(lines[i])) break;
+    if (/^.{5,80}\s{2,}\d{1,4}\s*$/.test(line)) break;
+
+    if (/^[-•*–]\s/.test(line)) {
+      specParts.push(line.replace(/^[-•*–]\s*/, "").trim());
+    } else if (/^Includes\b/i.test(line)) {
+      specParts.push(line);
+    } else if (
+      specParts.length > 0 &&
+      line.length < 120 &&
+      !/^\d{4,}/.test(line)
+    ) {
+      specParts.push(line);
+    }
+  }
+
+  return specParts.join("\n");
 }
 
 function UploadIcon() {
@@ -259,8 +255,10 @@ function SuccessCheckIcon() {
 export default function PurchaseOrderPage() {
   const [form, setForm] = useState<POForm>(EMPTY_FORM);
   const [items, setItems] = useState<LineItem[]>([{ ...EMPTY_ITEM }]);
+  const [locations, setLocations] = useState<Location[]>([]);
   const [submitted, setSubmitted] = useState(false);
   const [submittedPOId, setSubmittedPOId] = useState("");
+  const [submittedLocation, setSubmittedLocation] = useState("");
   const [uploadStatus, setUploadStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [uploadMessage, setUploadMessage] = useState("");
   const [isDragging, setIsDragging] = useState(false);
@@ -273,6 +271,10 @@ export default function PurchaseOrderPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const renderTaskRef = useRef<any>(null);
+
+  useEffect(() => {
+    setLocations(getAllLocations());
+  }, []);
 
   useEffect(() => {
     if (!pdfDoc || !canvasRef.current) return;
@@ -302,12 +304,16 @@ export default function PurchaseOrderPage() {
     };
   }, [pdfDoc, previewPage, previewScale]);
 
-  function handleFormChange(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) {
+  function handleFormChange(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) {
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
   }
 
-  function handleItemChange(idx: number, field: keyof LineItem, value: string) {
+  function handleItemChange(idx: number, field: "productName" | "qty" | "specs", value: string) {
     setItems((prev) => prev.map((item, i) => i === idx ? { ...item, [field]: value } : item));
+  }
+
+  function toggleSpecs(idx: number) {
+    setItems((prev) => prev.map((item, i) => i === idx ? { ...item, showSpecs: !item.showSpecs } : item));
   }
 
   function addItem() {
@@ -318,34 +324,49 @@ export default function PurchaseOrderPage() {
     setItems((prev) => prev.filter((_, i) => i !== idx));
   }
 
+  function resolvedLocation(): string {
+    if (form.location === ADD_NEW_VALUE) return form.newLocation.trim();
+    return form.location;
+  }
+
   function handleSubmit(e: React.SyntheticEvent) {
     e.preventDefault();
     const validItems = items.filter((it) => it.productName.trim() && it.qty.trim());
     if (validItems.length === 0) return;
+    if (form.location === ADD_NEW_VALUE && !form.newLocation.trim()) return;
     setShowConfirm(true);
   }
 
   function confirmSubmit() {
     const validItems = items.filter((it) => it.productName.trim() && it.qty.trim());
     const poId = form.poNumber.trim() || generatePOId();
-    const today = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+    const locationName = resolvedLocation();
+
+    if (form.location === ADD_NEW_VALUE && locationName) {
+      const newLoc = addLocation(locationName);
+      setLocations((prev) => [...prev, newLoc]);
+    }
+
+    const dateDisplay = form.date
+      ? formatDeliveryDate(form.date)
+      : new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 
     addPurchaseOrder({
       id: poId,
-      date: today,
-      expectedDate: form.expectedDate ? formatDeliveryDate(form.expectedDate) : "TBD",
+      date: dateDisplay,
+      location: locationName,
       items: validItems.map((it) => ({
         productId: 0,
         productName: it.productName.trim(),
         qty: parseInt(it.qty, 10),
+        specs: it.specs.trim() || undefined,
       })),
       status: "Pending",
-      supplier: form.recipient,
-      orderedBy: form.orderedBy,
-      notes: form.notes,
+      notes: "",
     });
 
     setSubmittedPOId(poId);
+    setSubmittedLocation(locationName);
     setShowConfirm(false);
     setSubmitted(true);
   }
@@ -355,6 +376,7 @@ export default function PurchaseOrderPage() {
     setItems([{ ...EMPTY_ITEM }]);
     setSubmitted(false);
     setSubmittedPOId("");
+    setSubmittedLocation("");
     setUploadStatus("idle");
     setUploadMessage("");
     setPdfDoc(null);
@@ -379,8 +401,6 @@ export default function PurchaseOrderPage() {
       const arrayBuffer = await file.arrayBuffer();
       const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) }).promise;
 
-      // Reconstruct visual layout per page using x/y coordinates.
-      // pdfjs returns small chunks; naive joining loses column gaps the item regex needs.
       type Chunk = { str: string; x: number; y: number; w: number };
       const pageParts: string[] = [];
       for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
@@ -394,7 +414,6 @@ export default function PurchaseOrderPage() {
           if (t.str.trim()) chunks.push({ str: t.str, x: t.transform[4], y: t.transform[5], w: t.width });
         }
 
-        // Group into lines by y-coordinate (PDF y=0 is bottom, so sort descending)
         chunks.sort((a, b) => b.y - a.y || a.x - b.x);
         const Y_TOL = 6;
         const lines: Chunk[][] = [];
@@ -408,7 +427,6 @@ export default function PurchaseOrderPage() {
           }
         }
 
-        // Build each line: insert double-space for large column gaps (>15 pts)
         const textLines = lines.map((line) => {
           let out = "";
           for (let i = 0; i < line.length; i++) {
@@ -425,18 +443,19 @@ export default function PurchaseOrderPage() {
       const poNumber = extractPONumber(fullText);
       const dateStr = extractDate(fullText);
       const isoDate = dateStr ? dateToISO(dateStr) : null;
-      const recipient = extractRecipient(fullText);
       const extracted = extractItems(fullText);
 
       setForm((prev) => ({
         ...prev,
         poNumber: poNumber ?? prev.poNumber,
-        recipient: recipient ?? prev.recipient,
-        expectedDate: isoDate ?? prev.expectedDate,
+        date: isoDate ?? prev.date,
       }));
 
       if (extracted.length > 0) {
-        setItems(extracted.map((it) => ({ productName: it.product_name, qty: String(it.qty) })));
+        setItems(extracted.map((it) => {
+          const specs = extractSpecs(fullText, it.product_name);
+          return { productName: it.product_name, qty: String(it.qty), specs, showSpecs: specs.length > 0 };
+        }));
       }
 
       setPdfDoc(pdf);
@@ -445,7 +464,7 @@ export default function PurchaseOrderPage() {
       setPdfFileName(file.name);
 
       setUploadStatus("success");
-      const fieldCount = [poNumber, recipient, isoDate].filter(Boolean).length;
+      const fieldCount = [poNumber, isoDate].filter(Boolean).length;
       setUploadMessage(
         `Extracted ${fieldCount} field${fieldCount !== 1 ? "s" : ""} and ${extracted.length} line item${extracted.length !== 1 ? "s" : ""}.`
       );
@@ -478,7 +497,7 @@ export default function PurchaseOrderPage() {
             Purchase Order <span className="font-mono font-bold">{submittedPOId}</span> has been recorded.
           </p>
           <p className="text-gray-500 text-sm mb-8">
-            {items.filter((it) => it.productName.trim()).length} product{items.filter((it) => it.productName.trim()).length !== 1 ? "s" : ""} for {form.recipient || "—"}
+            {items.filter((it) => it.productName.trim()).length} product{items.filter((it) => it.productName.trim()).length !== 1 ? "s" : ""} to {submittedLocation || "—"}
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <button onClick={handleReset} className="btn-primary">+ New Order</button>
@@ -610,7 +629,7 @@ export default function PurchaseOrderPage() {
         <div className="bg-white rounded-2xl border border-gray-200 shadow-md p-5 sm:p-8">
           <form onSubmit={handleSubmit} className="flex flex-col gap-5 sm:gap-6">
 
-            {/* PO Number + Recipient */}
+            {/* PO Number + Date */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="flex flex-col gap-1">
                 <label className="text-xs font-bold uppercase tracking-wider text-gray-600">PO Number</label>
@@ -624,44 +643,48 @@ export default function PurchaseOrderPage() {
               </div>
               <div className="flex flex-col gap-1">
                 <label className="text-xs font-bold uppercase tracking-wider text-gray-600">
-                  Recipient <span className="text-red-500">*</span>
+                  Date <span className="text-red-500">*</span>
                 </label>
                 <input
-                  name="recipient"
-                  value={form.recipient}
+                  name="date"
+                  type="date"
+                  value={form.date}
                   onChange={handleFormChange}
-                  placeholder="Recipient name"
                   className="input-themed p-2 text-black w-full"
                   required
                 />
               </div>
             </div>
 
-            {/* Date + Ordered By */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="flex flex-col gap-1">
-                <label className="text-xs font-bold uppercase tracking-wider text-gray-600">
-                  Expected Delivery Date <span className="text-red-500">*</span>
-                </label>
+            {/* Location */}
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-bold uppercase tracking-wider text-gray-600">
+                Location <span className="text-red-500">*</span>
+              </label>
+              <select
+                name="location"
+                value={form.location}
+                onChange={handleFormChange}
+                className="input-themed p-2 text-black w-full"
+                required
+              >
+                <option value="" disabled>Select a location…</option>
+                <option value={ADD_NEW_VALUE}>+ Add new location</option>
+                {locations.map((loc) => (
+                  <option key={loc.id} value={loc.name}>{loc.name}</option>
+                ))}
+              </select>
+              {form.location === ADD_NEW_VALUE && (
                 <input
-                  name="expectedDate"
-                  type="date"
-                  value={form.expectedDate}
+                  name="newLocation"
+                  value={form.newLocation}
                   onChange={handleFormChange}
-                  className="input-themed p-2 text-black w-full"
+                  placeholder="Enter new location name"
+                  className="input-themed p-2 text-black w-full mt-1"
                   required
+                  autoFocus
                 />
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-xs font-bold uppercase tracking-wider text-gray-600">Ordered By</label>
-                <input
-                  name="orderedBy"
-                  value={form.orderedBy}
-                  onChange={handleFormChange}
-                  placeholder="Your name"
-                  className="input-themed p-2 text-black w-full"
-                />
-              </div>
+              )}
             </div>
 
             {/* Line Items */}
@@ -675,53 +698,80 @@ export default function PurchaseOrderPage() {
                 </button>
               </div>
 
-              <div className="flex flex-col gap-2">
+              <div className="flex flex-col gap-3">
                 {items.map((item, idx) => (
-                  <div key={idx} className="flex gap-2 items-center">
-                    <input
-                      value={item.productName}
-                      onChange={(e) => handleItemChange(idx, "productName", e.target.value)}
-                      placeholder="Product name"
-                      className="input-themed p-2 text-black flex-1 text-sm"
-                      required={idx === 0}
-                    />
-                    <input
-                      type="number"
-                      min="1"
-                      value={item.qty}
-                      onChange={(e) => handleItemChange(idx, "qty", e.target.value)}
-                      placeholder="Qty"
-                      className="input-themed p-2 text-black w-20 font-mono text-sm"
-                      required={idx === 0}
-                    />
-                    {items.length > 1 && (
+                  <div key={idx} className="flex flex-col gap-1">
+                    {/* Product row */}
+                    <div className="flex gap-2 items-center">
+                      <input
+                        value={item.productName}
+                        onChange={(e) => handleItemChange(idx, "productName", e.target.value)}
+                        placeholder="Product name"
+                        className="input-themed p-2 text-black flex-1 text-sm"
+                        required={idx === 0}
+                      />
+                      <input
+                        type="number"
+                        min="1"
+                        value={item.qty}
+                        onChange={(e) => handleItemChange(idx, "qty", e.target.value)}
+                        placeholder="Qty"
+                        className="input-themed p-2 text-black w-20 font-mono text-sm"
+                        required={idx === 0}
+                      />
+                      {items.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => removeItem(idx)}
+                          className="text-gray-400 hover:text-red-500 transition-colors shrink-0"
+                          aria-label="Remove item"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Specs area */}
+                    {item.showSpecs ? (
+                      <div className="flex items-start gap-1 pl-1">
+                        <div className="flex-1 rounded-md border border-gray-200 bg-gray-50 overflow-hidden">
+                          <textarea
+                            value={item.specs}
+                            onChange={(e) => handleItemChange(idx, "specs", e.target.value)}
+                            placeholder="Specifications for this product…"
+                            rows={2}
+                            className="w-full p-2 text-xs text-gray-700 bg-transparent resize-none outline-none placeholder:text-gray-400"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => toggleSpecs(idx)}
+                          className="mt-1 text-gray-400 hover:text-red-500 transition-colors shrink-0"
+                          aria-label="Hide specifications"
+                          title="Hide specifications"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                          </svg>
+                        </button>
+                      </div>
+                    ) : (
                       <button
                         type="button"
-                        onClick={() => removeItem(idx)}
-                        className="text-gray-400 hover:text-red-500 transition-colors shrink-0"
-                        aria-label="Remove item"
+                        onClick={() => toggleSpecs(idx)}
+                        className="self-start pl-1 flex items-center gap-1 text-xs text-gray-400 hover:text-blue-600 transition-colors"
                       >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                        <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
                         </svg>
+                        <span>Specifications</span>
                       </button>
                     )}
                   </div>
                 ))}
               </div>
-            </div>
-
-            {/* Notes */}
-            <div className="flex flex-col gap-1">
-              <label className="text-xs font-bold uppercase tracking-wider text-gray-600">Notes</label>
-              <textarea
-                name="notes"
-                value={form.notes}
-                onChange={handleFormChange}
-                placeholder="Any special instructions or notes..."
-                rows={3}
-                className="input-themed p-2 text-black w-full resize-none"
-              />
             </div>
 
             <div className="flex flex-col sm:flex-row gap-3 pt-2">
@@ -746,30 +796,25 @@ export default function PurchaseOrderPage() {
               <span className="font-mono text-gray-800">{form.poNumber || "(auto-generated)"}</span>
             </div>
             <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
-              <span className="font-bold text-gray-600 sm:w-36 sm:shrink-0">Recipient</span>
-              <span>{form.recipient || "—"}</span>
+              <span className="font-bold text-gray-600 sm:w-36 sm:shrink-0">Date</span>
+              <span>{form.date || "—"}</span>
             </div>
             <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
-              <span className="font-bold text-gray-600 sm:w-36 sm:shrink-0">Expected Date</span>
-              <span>{form.expectedDate || "—"}</span>
+              <span className="font-bold text-gray-600 sm:w-36 sm:shrink-0">Location</span>
+              <span>{resolvedLocation() || "—"}</span>
             </div>
-            <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
-              <span className="font-bold text-gray-600 sm:w-36 sm:shrink-0">Ordered By</span>
-              <span>{form.orderedBy || "—"}</span>
-            </div>
-            {form.notes && (
-              <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
-                <span className="font-bold text-gray-600 sm:w-36 sm:shrink-0">Notes</span>
-                <span>{form.notes}</span>
-              </div>
-            )}
             <div>
               <span className="font-bold text-gray-600 block mb-1">Products</span>
-              <ul className="ml-2 flex flex-col gap-1">
+              <ul className="ml-2 flex flex-col gap-2">
                 {items.filter((it) => it.productName.trim()).map((it, idx) => (
-                  <li key={idx} className="flex gap-2 text-sm">
-                    <span className="font-mono font-bold w-8 text-right shrink-0">{it.qty}×</span>
-                    <span>{it.productName}</span>
+                  <li key={idx} className="flex flex-col gap-0.5">
+                    <div className="flex gap-2 text-sm">
+                      <span className="font-mono font-bold w-8 text-right shrink-0">{it.qty}×</span>
+                      <span>{it.productName}</span>
+                    </div>
+                    {it.specs.trim() && (
+                      <p className="ml-10 text-xs text-gray-500 italic whitespace-pre-line">{it.specs.trim()}</p>
+                    )}
                   </li>
                 ))}
               </ul>

@@ -1,4 +1,4 @@
-import { deliveries as seedDeliveries, purchaseOrders as seedPurchaseOrders, products, type Delivery, type PurchaseOrder } from "./data";
+import { deliveries as seedDeliveries, purchaseOrders as seedPurchaseOrders, locations as seedLocations, products, type Delivery, type PurchaseOrder, type Location } from "./data";
 
 const STORAGE_KEY = "hvac_deliveries";
 
@@ -92,4 +92,34 @@ export function generatePOId(): string {
   });
   const next = Math.max(0, ...allIds) + 1;
   return `PO-${String(next).padStart(3, "0")}`;
+}
+
+const LOCATION_STORAGE_KEY = "hvac_locations";
+
+function loadAddedLocations(): Location[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(LOCATION_STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as Location[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveAddedLocations(locs: Location[]) {
+  localStorage.setItem(LOCATION_STORAGE_KEY, JSON.stringify(locs));
+}
+
+export function getAllLocations(): Location[] {
+  return [...seedLocations, ...loadAddedLocations()];
+}
+
+export function addLocation(name: string): Location {
+  const all = getAllLocations();
+  const maxId = Math.max(0, ...all.map((l) => l.id));
+  const newLoc: Location = { id: maxId + 1, name: name.trim() };
+  const added = loadAddedLocations();
+  added.push(newLoc);
+  saveAddedLocations(added);
+  return newLoc;
 }
