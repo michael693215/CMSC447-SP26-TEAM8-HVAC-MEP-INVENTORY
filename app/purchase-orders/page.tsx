@@ -66,10 +66,10 @@ export default function PurchaseOrdersPage() {
     return sort.dir === "asc" ? cmp : -cmp;
   });
 
-  function Th({ col, label, center }: { col: SortKey; label: string; center?: boolean }) {
+  function Th({ col, label, center, className }: { col: SortKey; label: string; center?: boolean; className?: string }) {
     return (
       <th
-        className={`p-3 sm:p-4 border-b cursor-pointer select-none whitespace-nowrap hover:bg-black/5 ${center ? "text-center" : ""}`}
+        className={`p-3 sm:p-4 border-b cursor-pointer select-none whitespace-nowrap hover:bg-black/5 ${center ? "text-center" : ""} ${className ?? ""}`}
         onClick={() => toggleSort(col)}
       >
         {label}
@@ -102,7 +102,7 @@ export default function PurchaseOrdersPage() {
             </span>
             <input
               type="text"
-              placeholder="Search by PO #, supplier, or product..."
+              placeholder="Search by PO #, recipient, or product..."
               className="input-themed block w-full pl-10 pr-3 py-2 text-sm"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -125,7 +125,7 @@ export default function PurchaseOrdersPage() {
 
         {/* Table */}
         <div className="bg-white shadow-md rounded-b-lg overflow-x-auto border border-gray-200">
-          <table className="w-full min-w-[560px] text-left border-collapse">
+          <table className="w-full sm:min-w-[560px] text-left border-collapse">
             <thead className="table-header-accent">
               <tr>
                 <th
@@ -134,10 +134,10 @@ export default function PurchaseOrdersPage() {
                 >
                   PO # <SortArrow active={sort.key === "id"} dir={sort.dir} />
                 </th>
-                <Th col="date" label="Order Date" />
-                <th className="p-3 sm:p-4 border-b whitespace-nowrap">Expected</th>
+                <Th col="date" label="Order Date" className="hidden sm:table-cell" />
+                <th className="hidden sm:table-cell p-3 sm:p-4 border-b whitespace-nowrap">Expected</th>
                 <Th col="items" label="Products" center />
-                <Th col="supplier" label="Supplier" />
+                <Th col="supplier" label="Recipient" />
                 <Th col="status" label="Status" />
               </tr>
             </thead>
@@ -149,8 +149,8 @@ export default function PurchaseOrdersPage() {
                       {po.id}
                     </Link>
                   </td>
-                  <td className="p-3 sm:p-4 text-sm whitespace-nowrap">{po.date}</td>
-                  <td className="p-3 sm:p-4 text-sm whitespace-nowrap">{po.expectedDate}</td>
+                  <td className="hidden sm:table-cell p-3 sm:p-4 text-sm whitespace-nowrap">{po.date}</td>
+                  <td className="hidden sm:table-cell p-3 sm:p-4 text-sm whitespace-nowrap">{po.expectedDate}</td>
                   <td className="p-3 sm:p-4 text-center">
                     <Link
                       href={`/purchase-orders/${po.id}`}
