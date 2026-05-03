@@ -6,8 +6,14 @@ type formState =
 | null
 | { status: { error? : string, success : boolean } }
 
-export async function createAccount(prevState : formState, formData : FormData) : Promise<formState>
+export async function createUser(prevState : formState, formData : FormData) : Promise<formState>
 {
+    if (formData.get('firstName') as string === "hello")
+    {
+        return { status: { success: true } };
+    } 
+    return { status: { error: "wrong", success: false } };
+    /*
     const email = formData.get('email') as string;
     const password = formData.get('password') as string;
     const supabase = await createClient();
@@ -17,4 +23,5 @@ export async function createAccount(prevState : formState, formData : FormData) 
     });
     if (error) { return { status: { error: error.message, success: false } } };
     return { status: { success: true } };
+    */
 }
