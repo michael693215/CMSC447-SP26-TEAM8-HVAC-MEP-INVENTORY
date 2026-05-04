@@ -39,14 +39,6 @@ export default function MainMenu() {
       description: "Learn about the use of the app.",
       icon: "⚙️",
     },
-    {
-      name: "Add User",
-      path: "add-user",
-      description: "Add a new user.",
-      icon: "👥➕"
-    }
-
-
   ];
 
   return (
