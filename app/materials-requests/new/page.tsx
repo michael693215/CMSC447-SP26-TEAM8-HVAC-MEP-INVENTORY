@@ -2,6 +2,7 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { createMaterialRequest } from "../actions";
 
 interface ProductRow {
   id: number;
@@ -12,6 +13,9 @@ interface ProductRow {
 
 export default function NewMaterialsRequest() {
   const router = useRouter();
+  
+  // MOVED: The loading state is now safely inside the component!
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   // Form State
   const [reqId, setReqId] = useState("");
@@ -42,12 +46,22 @@ export default function NewMaterialsRequest() {
     setProducts([{ id: Date.now(), name: "", qty: "", specs: "" }]);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsSubmitting(true);
+
     const formData = { reqId, date, location, products };
-    console.log("Submitting Request:", formData);
-    alert("Materials Request Submitted!");
-    router.push("/materials-requests");
+    
+    // Call the server action we just created
+    const result = await createMaterialRequest(formData);
+
+    if (result.success) {
+      alert("Materials Request Submitted successfully!");
+      router.push("/materials-requests");
+    } else {
+      alert("Failed to submit request. Check console for details.");
+      setIsSubmitting(false);
+    }
   };
 
   return (

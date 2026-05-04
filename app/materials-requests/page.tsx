@@ -1,13 +1,6 @@
-"use client";
-import React, { useState } from "react";
+import React from "react";
 import Link from "next/link";
-
-// Fake data to populate the table initially
-const FAKE_REQUESTS = [
-  { id: "REQ-1042", date: "2026-05-01", location: "Location 1", itemsCount: 3, status: "Pending" },
-  { id: "REQ-1043", date: "2026-05-02", location: "Location 2", itemsCount: 1, status: "Fulfilled" },
-  { id: "REQ-1044", date: "2026-05-03", location: "Location 1", itemsCount: 5, status: "In Transit" },
-];
+import { getMaterialRequests } from "./actions";
 
 const STATUS_STYLES: Record<string, string> = {
   "Fulfilled": "bg-green-100 text-green-700",
@@ -15,8 +8,10 @@ const STATUS_STYLES: Record<string, string> = {
   "Pending": "bg-yellow-100 text-yellow-700",
 };
 
-export default function MaterialsRequestsList() {
-  const [requests] = useState(FAKE_REQUESTS);
+// Removed "use client" so this runs on the server!
+export default async function MaterialsRequestsList() {
+  // Fetch directly from the database on page load
+  const requests = await getMaterialRequests();
 
   return (
     <div className="min-h-screen p-4 sm:p-8 text-black bg-gray-50">
@@ -25,7 +20,6 @@ export default function MaterialsRequestsList() {
           ← Back to Main Menu
         </Link>
 
-        {/* Header Section with Create Button */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
           <div>
             <h1 className="text-3xl font-black uppercase tracking-tight">Materials Requests</h1>
@@ -33,13 +27,12 @@ export default function MaterialsRequestsList() {
           </div>
           <Link 
             href="/materials-requests/new"
-            className="btn-accent px-4 py-2 shrink-0 text-sm"
+            className="bg-black text-white px-6 py-3 rounded-lg font-bold hover:bg-gray-800 transition shadow-md whitespace-nowrap"
           >
             + Create New Request
           </Link>
         </div>
 
-        {/* Requests Table */}
         <div className="bg-white shadow-sm rounded-xl overflow-hidden border border-gray-200">
           <table className="w-full text-left border-collapse">
             <thead className="bg-gray-50 border-b border-gray-200">
@@ -53,12 +46,15 @@ export default function MaterialsRequestsList() {
               </tr>
             </thead>
             <tbody>
-              {requests.map((req, idx) => (
-                <tr key={idx} className="border-b border-gray-100 hover:bg-blue-50 transition">
-                  <td className="p-4 font-bold text-gray-900">{req.id}</td>
+              {requests.map((req: any) => (
+                <tr key={req.id} className="border-b border-gray-100 hover:bg-blue-50 transition">
+                  <td className="p-4 font-bold text-gray-900">{req.request_id}</td>
                   <td className="p-4 text-gray-600">{req.date}</td>
                   <td className="p-4 text-gray-600">{req.location}</td>
-                  <td className="p-4 text-center font-mono font-bold text-gray-700">{req.itemsCount}</td>
+                  <td className="p-4 text-center font-mono font-bold text-gray-700">
+                    {/* Because products is JSONB, it is returned as an array */}
+                    {req.products?.length || 0}
+                  </td>
                   <td className="p-4">
                     <span className={`px-3 py-1 rounded-md text-xs font-bold uppercase whitespace-nowrap ${STATUS_STYLES[req.status] || "bg-gray-100 text-gray-600"}`}>
                       {req.status}
@@ -79,7 +75,6 @@ export default function MaterialsRequestsList() {
             </tbody>
           </table>
         </div>
-
       </div>
     </div>
   );
