@@ -1,6 +1,19 @@
 export type DeliveryStatus = "Delivered" | "In Transit" | "Pending";
 export type PurchaseOrderStatus = "Pending" | "In Transit" | "Received";
 
+export interface Location {
+  id: number;
+  name: string;
+}
+
+export const locations: Location[] = [
+  { id: 1, name: "Main Warehouse" },
+  { id: 2, name: "Building A - Mechanical Room" },
+  { id: 3, name: "Building B - Rooftop Unit" },
+  { id: 4, name: "Field Office" },
+  { id: 5, name: "Job Site - Downtown" },
+];
+
 export interface Delivery {
   id: string;
   date: string;
@@ -28,16 +41,15 @@ export interface POLineItem {
   productId: number;
   productName: string;
   qty: number;
+  specs?: string;
 }
 
 export interface PurchaseOrder {
   id: string;
   date: string;
-  expectedDate: string;
+  location: string;
   items: POLineItem[];
   status: PurchaseOrderStatus;
-  supplier: string;
-  orderedBy: string;
   notes: string;
 }
 
@@ -45,54 +57,44 @@ export const purchaseOrders: PurchaseOrder[] = [
   {
     id: "PO-001",
     date: "Mar 10, 2026",
-    expectedDate: "Mar 15, 2026",
+    location: "Main Warehouse",
     items: [{ productId: 1, productName: "Filter 16x25x1", qty: 20 }],
     status: "Received",
-    supplier: "Miller Residential HVAC",
-    orderedBy: "J. Miller",
     notes: "Standard spring restock",
   },
   {
     id: "PO-002",
     date: "Mar 28, 2026",
-    expectedDate: "May 01, 2026",
+    location: "Building A - Mechanical Room",
     items: [
       { productId: 1, productName: "Filter 16x25x1", qty: 25 },
       { productId: 2, productName: "Capacitor 45/5 MFD", qty: 8 },
     ],
     status: "Pending",
-    supplier: "Miller Residential HVAC",
-    orderedBy: "",
     notes: "Awaiting warehouse confirmation",
   },
   {
     id: "PO-003",
     date: "Mar 15, 2026",
-    expectedDate: "Mar 20, 2026",
+    location: "Main Warehouse",
     items: [{ productId: 2, productName: "Capacitor 45/5 MFD", qty: 12 }],
     status: "Received",
-    supplier: "Davis Parts & Supply",
-    orderedBy: "R. Davis",
     notes: "",
   },
   {
     id: "PO-004",
     date: "Feb 05, 2026",
-    expectedDate: "Feb 10, 2026",
+    location: "Field Office",
     items: [{ productId: 3, productName: "Thermostat T6 Pro", qty: 5 }],
     status: "Received",
-    supplier: "City Property Mgmt",
-    orderedBy: "S. Chen",
     notes: "Priority order",
   },
   {
     id: "PO-005",
     date: "Mar 18, 2026",
-    expectedDate: "Apr 05, 2026",
+    location: "Job Site - Downtown",
     items: [{ productId: 3, productName: "Thermostat T6 Pro", qty: 3 }],
     status: "In Transit",
-    supplier: "City Property Mgmt",
-    orderedBy: "",
     notes: "Estimated arrival Apr 5",
   },
 ];

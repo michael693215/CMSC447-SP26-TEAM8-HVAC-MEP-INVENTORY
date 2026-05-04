@@ -11,7 +11,7 @@ const PO_STATUS_STYLES: Record<PurchaseOrderStatus, string> = {
   Pending: "bg-yellow-100 text-yellow-700",
 };
 
-type SortKey = "id" | "date" | "items" | "supplier" | "status";
+type SortKey = "id" | "date" | "items" | "location" | "status";
 type SortDir = "asc" | "desc";
 
 const STATUS_ORDER: Record<PurchaseOrderStatus, number> = { Pending: 0, "In Transit": 1, Received: 2 };
@@ -52,7 +52,7 @@ export default function PurchaseOrdersPage() {
   const filtered = allPOs.filter((po) => {
     const matchesSearch =
       po.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      po.supplier.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      po.location.toLowerCase().includes(searchTerm.toLowerCase()) ||
       po.items.some((item) => item.productName.toLowerCase().includes(searchTerm.toLowerCase()));
     const matchesStatus = statusFilter === "All" || po.status === statusFilter;
     return matchesSearch && matchesStatus;
@@ -66,10 +66,10 @@ export default function PurchaseOrdersPage() {
     return sort.dir === "asc" ? cmp : -cmp;
   });
 
-  function Th({ col, label, center }: { col: SortKey; label: string; center?: boolean }) {
+  function Th({ col, label, center, className }: { col: SortKey; label: string; center?: boolean; className?: string }) {
     return (
       <th
-        className={`p-3 sm:p-4 border-b cursor-pointer select-none whitespace-nowrap hover:bg-black/5 ${center ? "text-center" : ""}`}
+        className={`p-3 sm:p-4 border-b cursor-pointer select-none whitespace-nowrap hover:bg-black/5 ${center ? "text-center" : ""} ${className ?? ""}`}
         onClick={() => toggleSort(col)}
       >
         {label}
@@ -102,7 +102,7 @@ export default function PurchaseOrdersPage() {
             </span>
             <input
               type="text"
-              placeholder="Search by PO #, supplier, or product..."
+              placeholder="Search by PO #, location, or product..."
               className="input-themed block w-full pl-10 pr-3 py-2 text-sm"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -125,7 +125,7 @@ export default function PurchaseOrdersPage() {
 
         {/* Table */}
         <div className="bg-white shadow-md rounded-b-lg overflow-x-auto border border-gray-200">
-          <table className="w-full min-w-[560px] text-left border-collapse">
+          <table className="w-full sm:min-w-[560px] text-left border-collapse">
             <thead className="table-header-accent">
               <tr>
                 <th
@@ -134,10 +134,9 @@ export default function PurchaseOrdersPage() {
                 >
                   PO # <SortArrow active={sort.key === "id"} dir={sort.dir} />
                 </th>
-                <Th col="date" label="Order Date" />
-                <th className="p-3 sm:p-4 border-b whitespace-nowrap">Expected</th>
+                <Th col="date" label="Order Date" className="hidden sm:table-cell" />
                 <Th col="items" label="Products" center />
-                <Th col="supplier" label="Supplier" />
+                <Th col="location" label="Location" />
                 <Th col="status" label="Status" />
               </tr>
             </thead>
@@ -149,8 +148,7 @@ export default function PurchaseOrdersPage() {
                       {po.id}
                     </Link>
                   </td>
-                  <td className="p-3 sm:p-4 text-sm whitespace-nowrap">{po.date}</td>
-                  <td className="p-3 sm:p-4 text-sm whitespace-nowrap">{po.expectedDate}</td>
+                  <td className="hidden sm:table-cell p-3 sm:p-4 text-sm whitespace-nowrap">{po.date}</td>
                   <td className="p-3 sm:p-4 text-center">
                     <Link
                       href={`/purchase-orders/${po.id}`}
@@ -159,7 +157,7 @@ export default function PurchaseOrdersPage() {
                       {po.items.length} {po.items.length === 1 ? "product" : "products"}
                     </Link>
                   </td>
-                  <td className="p-3 sm:p-4 text-sm text-gray-700">{po.supplier}</td>
+                  <td className="p-3 sm:p-4 text-sm text-gray-700">{po.location}</td>
                   <td className="p-3 sm:p-4">
                     <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase whitespace-nowrap ${PO_STATUS_STYLES[po.status]}`}>
                       {po.status}
@@ -168,7 +166,7 @@ export default function PurchaseOrdersPage() {
                 </tr>
               )) : (
                 <tr>
-                  <td colSpan={6} className="p-10 text-center text-gray-500 italic">
+                  <td colSpan={5} className="p-10 text-center text-gray-500 italic">
                     No purchase orders match the current filters.
                   </td>
                 </tr>

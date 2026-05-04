@@ -113,10 +113,8 @@ export default function ProductDetailPage() {
                 <tr>
                   <th className="p-3 sm:p-4 border-b sticky left-0 z-20 bg-blue-200">PO #</th>
                   <th className="p-3 sm:p-4 border-b">Order Date</th>
-                  <th className="p-3 sm:p-4 border-b">Expected</th>
+                  <th className="p-3 sm:p-4 border-b">Location</th>
                   <th className="p-3 sm:p-4 border-b text-center">Qty</th>
-                  <th className="p-3 sm:p-4 border-b">Supplier</th>
-                  <th className="p-3 sm:p-4 border-b">Ordered By</th>
                   <th className="p-3 sm:p-4 border-b text-center">Status</th>
                 </tr>
               </thead>
@@ -129,12 +127,8 @@ export default function ProductDetailPage() {
                       <Link href={`/purchase-orders/${po.id}`} className="hover:underline text-blue-700">{po.id}</Link>
                     </td>
                     <td className="p-3 sm:p-4 text-sm whitespace-nowrap">{po.date}</td>
-                    <td className="p-3 sm:p-4 text-sm whitespace-nowrap">{po.expectedDate}</td>
+                    <td className="p-3 sm:p-4 text-sm text-gray-700">{po.location}</td>
                     <td className="p-3 sm:p-4 text-center font-mono">{itemQty}</td>
-                    <td className="p-3 sm:p-4 text-sm text-gray-700">{po.supplier}</td>
-                    <td className="p-3 sm:p-4 text-sm text-gray-600">
-                      {po.orderedBy || <span className="italic text-gray-400">—</span>}
-                    </td>
                     <td className="p-3 sm:p-4 text-center">
                       <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase whitespace-nowrap ${PO_STATUS_STYLES[po.status]}`}>
                         {po.status}
@@ -144,7 +138,7 @@ export default function ProductDetailPage() {
                   );
                 }) : (
                   <tr>
-                    <td colSpan={7} className="p-8 text-center text-gray-500 italic">
+                    <td colSpan={5} className="p-8 text-center text-gray-500 italic">
                       No purchase orders match the selected filter.
                     </td>
                   </tr>

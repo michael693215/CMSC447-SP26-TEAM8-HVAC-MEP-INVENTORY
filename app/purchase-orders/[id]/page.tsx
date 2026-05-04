@@ -56,13 +56,11 @@ export default function PurchaseOrderDetailPage() {
             <p className="text-xs font-bold uppercase tracking-widest text-gray-600 mb-1">Purchase Order</p>
             <h1 className="text-2xl sm:text-4xl font-black uppercase tracking-tight mb-3">{po.id}</h1>
             <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm text-gray-700">
-              <span><span className="font-semibold">Supplier:</span> {po.supplier}</span>
+              <span><span className="font-semibold">Location:</span> {po.location}</span>
               <span><span className="font-semibold">Order Date:</span> {po.date}</span>
-              <span><span className="font-semibold">Expected:</span> {po.expectedDate}</span>
-              {po.orderedBy && <span><span className="font-semibold">Ordered By:</span> {po.orderedBy}</span>}
             </div>
             {po.notes && (
-              <p className="mt-2 text-sm text-gray-600 italic">{po.notes}</p>
+              <p className="mt-2 text-sm text-gray-600 italic"><span className="font-semibold not-italic">Specifications:</span> {po.notes}</p>
             )}
           </div>
           <span className={`self-start px-3 py-1 rounded text-xs font-bold uppercase whitespace-nowrap ${PO_STATUS_STYLES[po.status]}`}>
@@ -100,27 +98,37 @@ export default function PurchaseOrderDetailPage() {
             </thead>
             <tbody>
               {po.items.map((item, idx) => (
-                <tr key={idx} className="hover:bg-blue-50 transition-colors border-b border-gray-100">
-                  <td className="p-3 sm:p-4 text-sm text-gray-500 font-mono sticky left-0 z-10 bg-white shadow-[1px_0_0_#e5e7eb]">
-                    {idx + 1}
-                  </td>
-                  <td className="p-3 sm:p-4 font-semibold">{item.productName}</td>
-                  <td className="p-3 sm:p-4 text-center font-mono text-lg font-bold">{item.qty}</td>
-                  {po.items.some((i) => i.productId > 0) && (
-                    <td className="p-3 sm:p-4">
-                      {item.productId > 0 ? (
-                        <Link
-                          href={`/inventory/${item.productId}`}
-                          className="text-xs bg-blue-200 hover:bg-gray-800 hover:text-white px-3 py-1 rounded border border-black transition font-bold whitespace-nowrap"
-                        >
-                          View Product
-                        </Link>
-                      ) : (
-                        <span className="text-xs text-gray-400 italic">—</span>
-                      )}
+                <React.Fragment key={idx}>
+                  <tr className="hover:bg-blue-50 transition-colors border-b border-gray-100">
+                    <td className="p-3 sm:p-4 text-sm text-gray-500 font-mono sticky left-0 z-10 bg-white shadow-[1px_0_0_#e5e7eb]">
+                      {idx + 1}
                     </td>
+                    <td className="p-3 sm:p-4 font-semibold">{item.productName}</td>
+                    <td className="p-3 sm:p-4 text-center font-mono text-lg font-bold">{item.qty}</td>
+                    {po.items.some((i) => i.productId > 0) && (
+                      <td className="p-3 sm:p-4">
+                        {item.productId > 0 ? (
+                          <Link
+                            href={`/inventory/${item.productId}`}
+                            className="text-xs bg-blue-200 hover:bg-gray-800 hover:text-white px-3 py-1 rounded border border-black transition font-bold whitespace-nowrap"
+                          >
+                            View Product
+                          </Link>
+                        ) : (
+                          <span className="text-xs text-gray-400 italic">—</span>
+                        )}
+                      </td>
+                    )}
+                  </tr>
+                  {item.specs && (
+                    <tr className="border-b border-gray-100 bg-gray-50">
+                      <td />
+                      <td colSpan={po.items.some((i) => i.productId > 0) ? 3 : 2} className="px-3 pb-2 pt-0 sm:px-4">
+                        <p className="text-xs text-gray-500 whitespace-pre-line leading-relaxed">{item.specs}</p>
+                      </td>
+                    </tr>
                   )}
-                </tr>
+                </React.Fragment>
               ))}
             </tbody>
           </table>
