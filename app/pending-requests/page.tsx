@@ -1,48 +1,44 @@
 "use client";
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-
-const FAKE_REQUESTS = [
-  {
-    id: 1,
-    location: "Location 1",
-    requestId: "REQ-90210",
-    items: [
-      { id: 201, name: "N95 Masks", quantity: "500", specifications: "Box of 50" },
-      { id: 202, name: "Safety Goggles", quantity: "40", specifications: "Anti-fog, clear" }
-    ]
-  },
-  {
-    id: 2,
-    location: "Location 1",
-    requestId: "REQ-90215",
-    items: [
-      { id: 203, name: "Work Gloves", quantity: "100", specifications: "Leather, Large" }
-    ]
-  },
-  {
-    id: 3,
-    location: "Location 2",
-    requestId: "REQ-88304",
-    items: [
-      { id: 204, name: "Caution Tape", quantity: "10", specifications: "1000ft roll, Yellow" },
-      { id: 205, name: "Traffic Cones", quantity: "25", specifications: "28-inch, Reflective" }
-    ]
-  }
-];
+import { getPendingMaterialRequests } from './actions';
 
 export default function PendingRequests() {
   const router = useRouter();
   const [currentLocation, setCurrentLocation] = useState('Location 1');
-  const [locationRequests, setLocationRequests] = useState(FAKE_REQUESTS);
+  const [locationRequests, setLocationRequests] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const savedLocation = sessionStorage.getItem('deliveryLocation');
-    if (savedLocation) {
+    async function loadRequests() {
+      // 1. Get the location from the user's session
+      const savedLocation = sessionStorage.getItem('deliveryLocation') || 'Location 1';
       setCurrentLocation(savedLocation);
-      setLocationRequests(FAKE_REQUESTS.filter(r => r.location === savedLocation));
+
+      // 2. Fetch the data from Supabase
+      const rawData = await getPendingMaterialRequests();
+
+      // 3. Filter by location AND translate the Supabase format into the format your UI expects
+      const formattedRequests = rawData
+        .filter((r: any) => r.location === savedLocation)
+        .map((req: any) => ({
+          id: req.id,
+          location: req.location,
+          requestId: req.request_id, // Map Supabase column name to UI variable
+          items: req.products ? req.products.map((p: any, idx: number) => ({
+            id: p.id || idx,
+            name: p.name || '',
+            quantity: p.qty || '', // Translate 'qty' to 'quantity'
+            specifications: p.specs || '' // Translate 'specs' to 'specifications'
+          })) : []
+        }));
+
+      setLocationRequests(formattedRequests);
+      setIsLoading(false);
     }
+    
+    loadRequests();
   }, []);
 
   const handleSelectRequest = (request: any) => {
@@ -56,9 +52,9 @@ export default function PendingRequests() {
     
     if (request.requestId.toLowerCase().includes(query)) return true;
     
-    const hasMatchingItem = request.items.some(item => 
+    const hasMatchingItem = request.items.some((item: any) => 
       item.name.toLowerCase().includes(query) || 
-      item.specifications.toLowerCase().includes(query)
+      (item.specifications && item.specifications.toLowerCase().includes(query))
     );
     return hasMatchingItem;
   });
@@ -106,43 +102,53 @@ export default function PendingRequests() {
               </tr>
             </thead>
             <tbody>
-              {displayedRequests.map((request) => (
-                <tr 
-                  key={request.id} 
-                  onClick={() => handleSelectRequest(request)}
-                  className="border-b border-gray-100 hover:bg-blue-50 cursor-pointer transition"
-                >
-                  <td className="p-4 font-bold text-gray-900">{request.requestId}</td>
-                  <td className="p-4">
-                    <ul className="text-sm text-gray-600 list-disc list-inside">
-                      {request.items.map((item: any) => (
-                        <li key={item.id}>
-                          <span className="font-semibold text-gray-800">{item.quantity}x</span> {item.name} <span className="text-gray-400">({item.specifications})</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </td>
-                  <td className="p-4 text-right">
-                    <button className="bg-blue-100 text-blue-700 px-4 py-2 rounded-lg font-semibold hover:bg-blue-200 transition active:scale-95">
-                      Select →
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              
-              {locationRequests.length === 0 && (
+              {isLoading ? (
                 <tr>
-                  <td colSpan={3} className="p-8 text-center text-gray-500 italic">
-                    No pending requests found for this location.
+                  <td colSpan={3} className="p-8 text-center text-gray-500 font-medium">
+                    Loading pending requests...
                   </td>
                 </tr>
-              )}
-              {locationRequests.length > 0 && displayedRequests.length === 0 && (
-                <tr>
-                  <td colSpan={3} className="p-8 text-center text-gray-500 italic">
-                    No results found for &quot;<span className="font-semibold">{searchQuery}</span>&quot;
-                  </td>
-                </tr>
+              ) : (
+                <>
+                  {displayedRequests.map((request) => (
+                    <tr 
+                      key={request.id} 
+                      onClick={() => handleSelectRequest(request)}
+                      className="border-b border-gray-100 hover:bg-blue-50 cursor-pointer transition"
+                    >
+                      <td className="p-4 font-bold text-gray-900">{request.requestId}</td>
+                      <td className="p-4">
+                        <ul className="text-sm text-gray-600 list-disc list-inside">
+                          {request.items.map((item: any) => (
+                            <li key={item.id}>
+                              <span className="font-semibold text-gray-800">{item.quantity}x</span> {item.name} <span className="text-gray-400">({item.specifications})</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </td>
+                      <td className="p-4 text-right">
+                        <button className="bg-blue-100 text-blue-700 px-4 py-2 rounded-lg font-semibold hover:bg-blue-200 transition active:scale-95">
+                          Select →
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  
+                  {!isLoading && locationRequests.length === 0 && (
+                    <tr>
+                      <td colSpan={3} className="p-8 text-center text-gray-500 italic">
+                        No pending requests found for this location.
+                      </td>
+                    </tr>
+                  )}
+                  {!isLoading && locationRequests.length > 0 && displayedRequests.length === 0 && (
+                    <tr>
+                      <td colSpan={3} className="p-8 text-center text-gray-500 italic">
+                        No results found for &quot;<span className="font-semibold">{searchQuery}</span>&quot;
+                      </td>
+                    </tr>
+                  )}
+                </>
               )}
             </tbody>
           </table>

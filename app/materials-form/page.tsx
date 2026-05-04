@@ -202,7 +202,7 @@ export default function MaterialsForm() {
                 onClick={handleFinalSubmit}
                 className="w-full sm:w-2/3 py-4 text-white font-bold bg-green-600 rounded-xl hover:bg-green-700 transition shadow-md active:scale-[0.98]"
               >
-                Confirm & Submit Request
+                Confirm & Log Delivery
               </button>
             </div>
           </div>
