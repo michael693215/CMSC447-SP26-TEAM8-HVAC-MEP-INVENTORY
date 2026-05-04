@@ -23,7 +23,7 @@ const EMPTY_FORM : addUserForm =
     lastName: "",
     email: "",
     password: "",
-    role: "unassigned",
+    role: "",
 }; 
 
 export default function AddUser()
@@ -57,12 +57,11 @@ export default function AddUser()
     useEffect(() => { 
         if (state?.status.success) emptyForm();
     }, [state])
-    console.log(state?.status)
     return (
         <div className="min-h-screen p-8 text-black">
             <div className="max-w-2xl mx-auto">
-                <Link href="/contacts" className="text-blue-600 hover:underline mb-4 inline-block font-medium">
-                    ← Back to Contacts
+                <Link href="/" className="text-blue-600 hover:underline mb-4 inline-block font-medium">
+                    ← Back to Main Menu
                 </Link>
                 <div className="mb-6">
                     <h1 className="text-3xl font-bold uppercase tracking-tight">Add User</h1>
@@ -149,24 +148,23 @@ export default function AddUser()
                                     className="input-themed p-2 text-black w-full"
                                     required
                                 >
-                                    <option value="unassigned">UNASSIGNED</option>
-                                    <option value="administrator" key="administrator">ADMINISTRATOR</option>
-                                    <option value="project_manager" key="projectManager">PROJECT MANAGER</option>
-                                    <option value="logistician" key="logistician">LOGISTICIAN</option>
-                                    <option value="foreman" key="foreman">FOREMAN</option>
+                                    <option value="none">UNASSIGNED</option>
+                                    <option value="administrator">ADMINISTRATOR</option>
+                                    <option value="project_manager">PROJECT MANAGER</option>
+                                    <option value="logistician">LOGISTICIAN</option>
+                                    <option value="foreman">FOREMAN</option>
                                 </select>
                             </div>
                         </div>             
                         { state && (state.status.success ? <div className="bg-green-100">User added successfully</div> : <div className="bg-red-100">{ state.status.error }</div>) }
                         {/* Actions */}
                         <div className="flex gap-3 pt-2">
-                        <button type="submit" className="btn-accent flex-1">
+                        <button type="submit" className="btn-primary flex-1">
                             Add User
                         </button>
                         <button
                             type="button"
                             className="btn-secondary flex-1"
-                            onClick={ emptyForm }
                         >
                             Clear Form
                         </button>
