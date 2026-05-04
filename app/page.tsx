@@ -33,6 +33,12 @@ function FeatureIcon({ type }: { type: string }) {
       <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
     </svg>
   );
+  // NEW: Materials Request Icon
+  if (type === "materials-request") return (
+    <svg xmlns="http://www.w3.org/2000/svg" className={cls} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+    </svg>
+  );
   return null;
 }
 
@@ -61,6 +67,13 @@ export default function MainMenu() {
       path: "/purchase-orders",
       description: "View and manage all purchase orders.",
       icon: "purchase-order",
+    },
+    // NEW: Materials Request Button
+    {
+      name: "Materials Request",
+      path: "/materials-requests", 
+      description: "Verify and log incoming material requests.",
+      icon: "materials-request",
     },
     {
       name: "Contact List",
