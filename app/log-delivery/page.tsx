@@ -1,39 +1,39 @@
-// File: app/log-delivery/page.tsx
 "use client";
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+// Import the action you already made for the materials-request page
+import { getLocations } from '../materials-requests/actions';
 
 export default function LogDeliveryHub() {
   const router = useRouter();
   const [location, setLocation] = useState('');
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  // State to hold real locations from the DB
+  const [dbLocations, setDbLocations] = useState<any[]>([]);
 
-  const locations = [
-    { value: 'Location 1', label: 'Location 1 (Main Warehouse)' },
-    { value: 'Location 2', label: 'Location 2 (Secondary Site)' },
-  ];
+  // Fetch real locations on mount
+  useEffect(() => {
+    async function load() {
+      const data = await getLocations();
+      setDbLocations(data);
+    }
+    load();
+  }, []);
 
-  // Route to your relocated scanner page
   const handlePurchaseOrder = () => {
-    // Save the location to the backpack for the pending deliveries table
     sessionStorage.setItem('deliveryLocation', location);
-    
-    // Send to the scanner
     router.push('/scanner'); 
   };
 
   const handleMaterialsRequest = () => {
-      // Save the location to the backpack
-      sessionStorage.setItem('deliveryLocation', location);
-      // Route to the new pending requests table
-      router.push('/pending-requests'); 
-    };
+    sessionStorage.setItem('deliveryLocation', location);
+    router.push('/pending-requests'); 
+  };
 
   return (
     <div className="min-h-screen p-8 text-black bg-white">
       <div className="max-w-3xl mx-auto">
         
-        {/* Navigation */}
         <button 
           onClick={() => router.push('/')} 
           className="text-blue-600 hover:underline mb-6 inline-block font-medium"
@@ -48,49 +48,50 @@ export default function LogDeliveryHub() {
 
         <div className="space-y-8">
           
-          {/* Location Dropdown Section */}
           <div className="bg-gray-50 p-6 rounded-xl border border-gray-200 shadow-sm">
             <label className="block text-sm font-bold text-gray-700 mb-2 uppercase tracking-wide">
               Current Location
             </label>
             <div className="relative w-full">
               <button
+                type="button"
                 onClick={() => setDropdownOpen(!dropdownOpen)}
                 className="w-full p-4 border border-gray-300 rounded-lg bg-white font-medium text-lg text-left focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm flex justify-between items-center"
               >
                 <span className={`truncate ${!location ? 'text-gray-400' : 'text-gray-900'}`}>
-                  {location ? locations.find(l => l.value === location)?.label : 'Select a location...'}
+                  {location 
+                    ? dbLocations.find(l => l.id === location)?.name 
+                    : 'Select a location...'}
                 </span>
-                <svg className="h-5 w-5 text-gray-500 flex-shrink-0 ml-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                <svg className={`h-5 w-5 text-gray-500 transition-transform ${dropdownOpen ? 'rotate-180' : ''}`} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
                   <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/>
                 </svg>
               </button>
 
               {dropdownOpen && (
-                <div className="absolute z-10 w-full mt-2 bg-white border border-gray-200 rounded-lg shadow-xl overflow-hidden">
-                  {locations.map((loc) => (
+                <div className="absolute z-10 w-full mt-2 bg-white border border-gray-200 rounded-lg shadow-xl overflow-hidden max-h-60 overflow-y-auto">
+                  {dbLocations.map((loc) => (
                     <button
-                      key={loc.value}
-                      onClick={() => { setLocation(loc.value); setDropdownOpen(false); }}
-                      className={`w-full text-left px-4 py-4 text-lg hover:bg-blue-50 transition ${location === loc.value ? 'bg-blue-100 font-bold text-blue-800' : 'text-gray-700'}`}
+                      key={loc.id}
+                      onClick={() => { setLocation(loc.id); setDropdownOpen(false); }}
+                      className={`w-full text-left px-4 py-4 text-lg hover:bg-blue-50 transition ${location === loc.id ? 'bg-blue-100 font-bold text-blue-800' : 'text-gray-700'}`}
                     >
-                      {loc.label}
+                      {loc.name}
                     </button>
                   ))}
+                  {dbLocations.length === 0 && (
+                    <div className="p-4 text-gray-400 italic">Loading locations...</div>
+                  )}
                 </div>
               )}
             </div>
             
-            {/* Warning Message if no location is selected */}
             {!location && (
               <p className="mt-3 text-red-500 text-sm font-medium">Please select a location to continue.</p>
             )}
           </div>
           
-          {/* Delivery Type Buttons */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            
-            {/* Purchase Order Button */}
             <button 
               onClick={handlePurchaseOrder}
               disabled={!location}
@@ -112,7 +113,6 @@ export default function LogDeliveryHub() {
               </p>
             </button>
 
-            {/* Materials Request Button */}
             <button 
               onClick={handleMaterialsRequest}
               disabled={!location}
@@ -133,10 +133,8 @@ export default function LogDeliveryHub() {
                 Confirm materials requested from the warehouse have arrived on site.
               </p>
             </button>
-
           </div>
         </div>
-
       </div>
     </div>
   );

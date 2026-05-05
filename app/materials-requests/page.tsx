@@ -68,7 +68,7 @@ export default async function MaterialsRequestsList() {
                       </Link>
                     </td>
                 </tr>
-              ))}
+              ))} 
               {requests.length === 0 && (
                 <tr>
                   <td colSpan={5} className="p-8 text-center text-gray-500 italic">No material requests found.</td>

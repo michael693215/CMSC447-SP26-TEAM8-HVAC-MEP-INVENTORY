@@ -2,44 +2,62 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { getPendingMaterialRequests } from './actions';
+import { getLocations } from '../materials-requests/actions';
 
 export default function PendingRequests() {
   const router = useRouter();
-  const [currentLocation, setCurrentLocation] = useState('Location 1');
+  const [addressName, setAddressName] = useState('Loading address...');
   const [locationRequests, setLocationRequests] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    async function loadRequests() {
-      // 1. Get the location from the user's session
-      const savedLocation = sessionStorage.getItem('deliveryLocation') || 'Location 1';
-      setCurrentLocation(savedLocation);
+    async function loadData() {
+      // 1. Get the current location UUID from session
+      const savedLocationId = sessionStorage.getItem('deliveryLocation');
+      
+      if (!savedLocationId) {
+        // Fallback in case someone navigates here directly without picking a location
+        router.push('/log-delivery');
+        return;
+      }
 
-      // 2. Fetch the data from Supabase
-      const rawData = await getPendingMaterialRequests();
+      // 2. Fetch data in parallel for speed
+      const [allLocations, rawData] = await Promise.all([
+        getLocations(),
+        getPendingMaterialRequests()
+      ]);
 
-      // 3. Filter by location AND translate the Supabase format into the format your UI expects
-      const formattedRequests = rawData
-        .filter((r: any) => r.location === savedLocation)
+      // 3. Find the pretty address for the header
+      const currentLoc = allLocations.find(l => l.id === savedLocationId);
+      setAddressName(currentLoc ? currentLoc.name : "Unknown Location");
+
+// 4. Filter and format the requests
+      const formatted = rawData
+        .filter((req: any) => {
+          return req.line_items?.some((item: any) => item.to_id === savedLocationId);
+        })
         .map((req: any) => ({
           id: req.id,
-          location: req.location,
-          requestId: req.request_id, // Map Supabase column name to UI variable
-          items: req.products ? req.products.map((p: any, idx: number) => ({
-            id: p.id || idx,
-            name: p.name || '',
-            quantity: p.qty || '', // Translate 'qty' to 'quantity'
-            specifications: p.specs || '' // Translate 'specs' to 'specifications'
-          })) : []
+          // Slice the ID to 8 characters and keep it lowercase to match the other table perfectly
+          displayId: req.id.slice(0, 8),
+          items: req.line_items
+            .filter((item: any) => item.to_id === savedLocationId)
+            .map((item: any) => ({
+              // FIX: We use line_number here because the line item table doesn't have an ID
+              id: item.line_number.toString(), 
+              line_number: item.line_number,
+              name: item.materials?.description || "Unknown Material",
+              quantity: item.quantity
+            }))
         }));
 
-      setLocationRequests(formattedRequests);
+      setLocationRequests(formatted);
       setIsLoading(false);
     }
     
-    loadRequests();
-  }, []);
+    loadData();
+  }, [router]);
 
   const handleSelectRequest = (request: any) => {
     sessionStorage.setItem('selectedRequestData', JSON.stringify(request));
@@ -49,14 +67,8 @@ export default function PendingRequests() {
   const displayedRequests = locationRequests.filter((request) => {
     if (!searchQuery) return true;
     const query = searchQuery.toLowerCase();
-    
-    if (request.requestId.toLowerCase().includes(query)) return true;
-    
-    const hasMatchingItem = request.items.some((item: any) => 
-      item.name.toLowerCase().includes(query) || 
-      (item.specifications && item.specifications.toLowerCase().includes(query))
-    );
-    return hasMatchingItem;
+    if (request.displayId.toLowerCase().includes(query)) return true;
+    return request.items.some((item: any) => item.name.toLowerCase().includes(query));
   });
 
   return (
@@ -73,7 +85,7 @@ export default function PendingRequests() {
         <header className="mb-8">
           <h1 className="text-3xl font-bold uppercase tracking-tight">Pending Requests</h1>
           <p className="text-gray-500 mt-2 text-lg">
-            Materials requested for <span className="font-bold text-blue-600">{currentLocation}</span>
+            Materials requested for <span className="font-bold text-blue-600">{addressName}</span>
           </p>
         </header>
 
@@ -116,12 +128,12 @@ export default function PendingRequests() {
                       onClick={() => handleSelectRequest(request)}
                       className="border-b border-gray-100 hover:bg-blue-50 cursor-pointer transition"
                     >
-                      <td className="p-4 font-bold text-gray-900">{request.requestId}</td>
+                      <td className="p-4 font-bold text-gray-900">{request.displayId}</td>
                       <td className="p-4">
                         <ul className="text-sm text-gray-600 list-disc list-inside">
                           {request.items.map((item: any) => (
-                            <li key={item.id}>
-                              <span className="font-semibold text-gray-800">{item.quantity}x</span> {item.name} <span className="text-gray-400">({item.specifications})</span>
+                            <li key={`${request.id}-${item.line_number}`}>
+                              <span className="font-semibold text-gray-800">{item.quantity}x</span> {item.name}
                             </li>
                           ))}
                         </ul>
@@ -141,6 +153,7 @@ export default function PendingRequests() {
                       </td>
                     </tr>
                   )}
+
                   {!isLoading && locationRequests.length > 0 && displayedRequests.length === 0 && (
                     <tr>
                       <td colSpan={3} className="p-8 text-center text-gray-500 italic">
