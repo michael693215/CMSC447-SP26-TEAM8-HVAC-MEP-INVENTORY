@@ -4,8 +4,10 @@ import React, { useState } from 'react';
 import { DataTable } from '@/components/ui/DataTable'
 import { Employee, employeeColumns } from '@/components/tables/employees/columns'
 import Link from 'next/link';
+import { useRouter } from 'next/navigation'
 
 export default function ContactsPage() {
+  const router = useRouter();
   const [searchTerm, setSearchTerm] = useState("");
 
   const allContacts : Employee[] = [
@@ -49,7 +51,7 @@ export default function ContactsPage() {
 
         {/* Table Section */}
         <div className="bg-white shadow-md rounded-b-lg overflow-hidden border border-gray-200">
-          <DataTable columns={ employeeColumns } data={ allContacts }/>
+          <DataTable columns={ employeeColumns } data={ allContacts } onRowClick={ (user) => router.push(`contacts/${ user.id }`) } />
         </div>
       </div>
     </div>
