@@ -83,7 +83,6 @@
 body {
   background-color: var(--color-bg);
   color: var(--color-text);
-  font-family: var(--font-sans), Arial, sans-serif;
 }
 
 /* ── Reusable utility classes ─────────────────────────────────── */

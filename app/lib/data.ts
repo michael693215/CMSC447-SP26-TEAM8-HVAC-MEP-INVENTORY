@@ -1,4 +1,18 @@
 export type DeliveryStatus = "Delivered" | "In Transit" | "Pending";
+export type PurchaseOrderStatus = "Pending" | "In Transit" | "Received";
+
+export interface Location {
+  id: number;
+  name: string;
+}
+
+export const locations: Location[] = [
+  { id: 1, name: "Main Warehouse" },
+  { id: 2, name: "Building A - Mechanical Room" },
+  { id: 3, name: "Building B - Rooftop Unit" },
+  { id: 4, name: "Field Office" },
+  { id: 5, name: "Job Site - Downtown" },
+];
 
 export interface Delivery {
   id: string;
@@ -22,6 +36,68 @@ export interface Product {
   category: string;
   deliveryIds: string[];
 }
+
+export interface POLineItem {
+  productId: number;
+  productName: string;
+  qty: number;
+  specs?: string;
+}
+
+export interface PurchaseOrder {
+  id: string;
+  date: string;
+  location: string;
+  items: POLineItem[];
+  status: PurchaseOrderStatus;
+  notes: string;
+}
+
+export const purchaseOrders: PurchaseOrder[] = [
+  {
+    id: "PO-001",
+    date: "Mar 10, 2026",
+    location: "Main Warehouse",
+    items: [{ productId: 1, productName: "Filter 16x25x1", qty: 20 }],
+    status: "Received",
+    notes: "Standard spring restock",
+  },
+  {
+    id: "PO-002",
+    date: "Mar 28, 2026",
+    location: "Building A - Mechanical Room",
+    items: [
+      { productId: 1, productName: "Filter 16x25x1", qty: 25 },
+      { productId: 2, productName: "Capacitor 45/5 MFD", qty: 8 },
+    ],
+    status: "Pending",
+    notes: "Awaiting warehouse confirmation",
+  },
+  {
+    id: "PO-003",
+    date: "Mar 15, 2026",
+    location: "Main Warehouse",
+    items: [{ productId: 2, productName: "Capacitor 45/5 MFD", qty: 12 }],
+    status: "Received",
+    notes: "",
+  },
+  {
+    id: "PO-004",
+    date: "Feb 05, 2026",
+    location: "Field Office",
+    items: [{ productId: 3, productName: "Thermostat T6 Pro", qty: 5 }],
+    status: "Received",
+    notes: "Priority order",
+  },
+  {
+    id: "PO-005",
+    date: "Mar 18, 2026",
+    location: "Job Site - Downtown",
+    items: [{ productId: 3, productName: "Thermostat T6 Pro", qty: 3 }],
+    status: "In Transit",
+    notes: "Estimated arrival Apr 5",
+  },
+];
 
 export const deliveries: Delivery[] = [
   {
@@ -122,4 +198,12 @@ export function getProductById(id: number): Product | undefined {
 
 export function getDeliveriesForProduct(productId: number): Delivery[] {
   return deliveries.filter((d) => d.productId === productId);
+}
+
+export function getPurchaseOrderById(id: string): PurchaseOrder | undefined {
+  return purchaseOrders.find((po) => po.id === id);
+}
+
+export function getPurchaseOrdersForProduct(productId: number): PurchaseOrder[] {
+  return purchaseOrders.filter((po) => po.items.some((item) => item.productId === productId));
 }
