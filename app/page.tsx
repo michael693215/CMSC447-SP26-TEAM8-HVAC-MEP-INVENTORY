@@ -1,5 +1,11 @@
+'use client'
+
 import Link from "next/link";
 import { signOut } from './actions'
+import { ROUTE_PERMISSIONS } from '@/lib/types'
+import { getUserRole } from '@/lib/actions'
+import { useEffect, useState } from 'react'
+import { Role } from '@/lib/types'
 
 function FeatureIcon({ type }: { type: string }) {
   const cls = "w-10 h-10 sm:w-14 sm:h-14 stroke-black";
@@ -43,6 +49,25 @@ function FeatureIcon({ type }: { type: string }) {
 }
 
 export default function MainMenu() {
+  const [role, setRole] = useState<Role>('unassigned');
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    async function getRole() {
+      const data = await getUserRole();
+      setRole(data);
+      setIsLoading(false);
+    }
+    getRole();
+  }, [])
+
+  if (isLoading) 
+  {
+    return (
+      <div className="flex justify-center min-h-screen items-center">Loading columns...</div>
+    )
+  }
+
   const features = [
     {
       name: "View Inventory",
@@ -89,6 +114,14 @@ export default function MainMenu() {
     },
   ];
 
+  const visibleFeatures = features.filter((feature) => {
+    const allowedRoles = ROUTE_PERMISSIONS[feature.path as keyof typeof ROUTE_PERMISSIONS];
+    
+    // If the path isn't in the map, we can assume it's public (like /about)
+    // If it IS in the map, check if the current role is allowed
+    return !allowedRoles || allowedRoles.includes(role);
+  });
+
   return (
     <div className="flex flex-col items-center justify-start min-h-screen p-4 sm:p-6 md:p-12 bg-gray-100">
       {/* Header */}
@@ -104,8 +137,8 @@ export default function MainMenu() {
       </header>
 
       {/* Grid: 1-col on mobile, 2-col on sm+ */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 w-full max-w-5xl">
-        {features.map((feature) => (
+      <div className="grid grid-cols-2 gap-6 w-full max-w-5xl">
+        {visibleFeatures.map((feature) => (
           <Link key={feature.path} href={feature.path} className="group">
             <div className="flex flex-col items-center justify-center p-6 sm:p-8 bg-blue-200 shadow-lg rounded-2xl border-2 border-black group-hover:border-black transition-all duration-300 cursor-pointer text-center min-h-[10rem] sm:aspect-square">
               <div className="mb-3 sm:mb-5 group-hover:scale-110 transition-transform">
