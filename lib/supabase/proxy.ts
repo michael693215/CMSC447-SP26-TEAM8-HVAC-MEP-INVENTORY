@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { ROUTE_PERMISSIONS } from '@/lib/types'
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
@@ -64,6 +65,26 @@ export async function updateSession(request: NextRequest) {
     url.pathname = '/';
     return NextResponse.redirect(url);
   }
+
+  // 1. Sort the routes by length (longest first)
+const sortedRoutes = Object.keys(ROUTE_PERMISSIONS).sort((a, b) => b.length - a.length);
+
+// 2. Find the match
+// If the route is '/', it must be an exact match. 
+// Otherwise, we check if the current path starts with the protected route.
+const matchedRoute = sortedRoutes.find(route => 
+  route === '/' ? request.nextUrl.pathname === '/' : request.nextUrl.pathname.startsWith(route)
+);
+
+// 3. Get the roles for that specific match
+const allowedRoles = matchedRoute ? ROUTE_PERMISSIONS[matchedRoute] : null;
+
+// 4. Run the check
+if (allowedRoles && !allowedRoles.includes(role)) {
+  const url = request.nextUrl.clone();
+  url.pathname = '/'; // Kick them to the home page
+  return NextResponse.redirect(url);
+} 
 
   // IMPORTANT: You *must* return the supabaseResponse object as it is. If you're
   // creating a new response object with NextResponse.next() make sure to:
