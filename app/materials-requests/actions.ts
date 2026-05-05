@@ -73,16 +73,70 @@ export async function getInventoryByLocation(locationId: string) {
   return data;
 }
 
+export async function getMaterialRequestById(id: string) {
+  const supabase = await createClient();
+
+  // 1. Get the main header
+  const { data: request, error: reqError } = await supabase
+    .from("materials_request")
+    .select("*")
+    .eq("id", id)
+    .single();
+
+  if (reqError || !request) return null;
+
+  // 2. Get the connected line items
+  // NOTE: Ensure 'request_id' is the column name in materials_request_line_item 
+  // that points back to the materials_request table!
+  const { data: lineItems, error: linesError } = await supabase
+    .from("materials_request_line_item")
+    .select(`
+      line_number,
+      quantity,
+      from_id,
+      to_id,
+      SKU,
+      materials!inner (
+        description
+      )
+    `)
+    .eq("request_id", id)
+    .order("line_number", { ascending: true });
+
+  if (linesError) {
+    console.error("Error fetching line items:", linesError.message);
+  }
+
+  // 3. Get Locations to map IDs to Names
+  const locations = await getLocations();
+  const locationMap = new Map(locations.map(loc => [loc.id, loc.name]));
+
+  // 4. Format everything for the UI
+  const formattedItems = (lineItems || []).map((item: any) => ({
+    line_number: item.line_number,
+    quantity: item.quantity,
+    sku: item.SKU,
+    description: item.materials?.description || "Unknown Material",
+    from_name: locationMap.get(item.from_id) || "Unknown Source",
+    to_name: locationMap.get(item.to_id) || "Unknown Destination"
+  }));
+
+  return {
+    ...request,
+    items: formattedItems
+  };
+}
+
 export async function createMaterialRequest(formData: any) {
   const supabase = await createClient();
 
-  // FIXED: No more fake ID generation! 
-  // We just insert the date/status and let Supabase generate the real UUID.
+  // 1. Insert the "Header" (The main request entry)
+  // We let Supabase generate the UUID 'id' automatically
   const { data: requestData, error: requestError } = await supabase
     .from("materials_request")
     .insert([{ 
       date: formData.date, 
-      status: "pending" 
+      status: "pending" // Matching your lowercase database Enum
     }])
     .select("id")
     .single();
@@ -92,7 +146,8 @@ export async function createMaterialRequest(formData: any) {
     return { success: false, error: requestError?.message };
   }
 
-  // FIXED: We take the real UUID 'id' from step 1, and insert it as the 'request_id' here!
+  // 2. Prepare the Line Items
+  // We use the 'id' we just got from the insert above to link these items
   const lineItems = formData.items.map((item: any, index: number) => ({
     request_id: requestData.id, 
     line_number: index + 1,
@@ -102,6 +157,7 @@ export async function createMaterialRequest(formData: any) {
     to_id: formData.toLocation,
   }));
 
+  // 3. Insert all line items at once
   const { error: lineItemsError } = await supabase
     .from("materials_request_line_item")
     .insert(lineItems);
@@ -111,6 +167,7 @@ export async function createMaterialRequest(formData: any) {
     return { success: false, error: lineItemsError.message };
   }
 
+  // Refresh the list page data
   revalidatePath("/materials-requests"); 
   return { success: true };
 }

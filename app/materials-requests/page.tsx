@@ -59,11 +59,14 @@ export default async function MaterialsRequestsList() {
                       {req.status}
                     </span>
                   </td>
-                  <td className="p-4 text-right">
-                    <button className="text-blue-600 font-semibold hover:underline text-sm">
-                      View Details
-                    </button>
-                  </td>
+                    <td className="p-4 text-right">
+                      <Link 
+                        href={`/materials-requests/${req.id}`} 
+                        className="text-blue-600 font-semibold hover:underline text-sm"
+                      >
+                        View Details
+                      </Link>
+                    </td>
                 </tr>
               ))}
               {requests.length === 0 && (
