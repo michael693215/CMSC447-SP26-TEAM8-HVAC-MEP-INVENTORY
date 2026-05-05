@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { FaEye, FaEyeSlash } from 'react-icons/fa'
 import { IconType } from 'react-icons'
 
-import IconComponent from '@/components/utils/IconComponent'
+import IconComponent from '@/components/ui/IconComponent'
 import { createUser } from './actions'
 
 interface addUserForm 
