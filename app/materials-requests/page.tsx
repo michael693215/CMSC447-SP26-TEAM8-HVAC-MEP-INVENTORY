@@ -8,9 +8,7 @@ const STATUS_STYLES: Record<string, string> = {
   "Pending": "bg-yellow-100 text-yellow-700",
 };
 
-// Removed "use client" so this runs on the server!
 export default async function MaterialsRequestsList() {
-  // Fetch directly from the database on page load
   const requests = await getMaterialRequests();
 
   return (
@@ -39,7 +37,6 @@ export default async function MaterialsRequestsList() {
               <tr>
                 <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Request ID</th>
                 <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Date</th>
-                <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Location</th>
                 <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-center">Items</th>
                 <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Status</th>
                 <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Action</th>
@@ -48,13 +45,15 @@ export default async function MaterialsRequestsList() {
             <tbody>
               {requests.map((req: any) => (
                 <tr key={req.id} className="border-b border-gray-100 hover:bg-blue-50 transition">
-                  <td className="p-4 font-bold text-gray-900">{req.request_id}</td>
+                  {/* Slicing the UUID so it looks clean! */}
+                  <td className="p-4 font-mono font-bold text-gray-900">{req.id.slice(0, 8)}</td>
                   <td className="p-4 text-gray-600">{req.date}</td>
-                  <td className="p-4 text-gray-600">{req.location}</td>
+                  
                   <td className="p-4 text-center font-mono font-bold text-gray-700">
-                    {/* Because products is JSONB, it is returned as an array */}
-                    {req.products?.length || 0}
+                    {/* Looking at the new joined table to count items */}
+                    {req.line_items?.length || 0}
                   </td>
+                  
                   <td className="p-4">
                     <span className={`px-3 py-1 rounded-md text-xs font-bold uppercase whitespace-nowrap ${STATUS_STYLES[req.status] || "bg-gray-100 text-gray-600"}`}>
                       {req.status}
@@ -69,7 +68,7 @@ export default async function MaterialsRequestsList() {
               ))}
               {requests.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="p-8 text-center text-gray-500 italic">No material requests found.</td>
+                  <td colSpan={5} className="p-8 text-center text-gray-500 italic">No material requests found.</td>
                 </tr>
               )}
             </tbody>

@@ -1,50 +1,116 @@
 "use server";
 
-// 1. Import the setup from your specific server file
-import { createClient } from "@/lib/supabase/server"; 
+import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 
-// 2. Fetch all requests for the list page
 export async function getMaterialRequests() {
-  // Initialize the secure server client
   const supabase = await createClient();
 
+  // FIXED: Removed the fake 'request_id' column from the select query.
+  // FIXED: Changed the line item count to look for 'line_number' based on your screenshot!
   const { data, error } = await supabase
     .from("materials_request")
-    .select("*")
-    .order("created_at", { ascending: false });
+    .select(`
+      id,
+      date,
+      status,
+      line_items:materials_request_line_item ( line_number )
+    `)
+    .order("date", { ascending: false });
 
-    if (error) {
-        // This forces it to print the actual details
-        console.error("Error fetching requests:", JSON.stringify(error, null, 2));
-        return [];
-    }
+  if (error) {
+    console.log("Error fetching requests:", error.message);
+    return [];
+  }
   return data;
 }
 
-// 3. Insert a new request from the form
-export async function createMaterialRequest(formData: any) {
-  // Initialize the secure server client
+export async function getLocations() {
   const supabase = await createClient();
 
   const { data, error } = await supabase
+    .from("location")
+    .select(`
+      id,
+      address:location_address (
+        street_number,
+        street_name,
+        city
+      )
+    `);
+
+  if (error) {
+    console.log("Error fetching locations:", error.message);
+    return [];
+  }
+
+  return data.map((loc: any) => ({
+    id: loc.id,
+    name: loc.address 
+      ? `${loc.address.street_number} ${loc.address.street_name} (${loc.address.city})`
+      : "Unnamed Location"
+  }));
+}
+
+export async function getInventoryByLocation(locationId: string) {
+  const supabase = await createClient();
+  
+  const { data, error } = await supabase
+    .from("location_inventory")
+    .select(`
+      id,
+      quantity,
+      SKU,
+      materials ( description )
+    `)
+    .eq("location_id", locationId)
+    .gt("quantity", 0);
+
+  if (error) {
+    console.log("Error fetching inventory:", error.message);
+    return [];
+  }
+  return data;
+}
+
+export async function createMaterialRequest(formData: any) {
+  const supabase = await createClient();
+
+  // FIXED: No more fake ID generation! 
+  // We just insert the date/status and let Supabase generate the real UUID.
+  const { data: requestData, error: requestError } = await supabase
     .from("materials_request")
-    .insert([
-      {
-        request_id: formData.reqId || `REQ-${Math.floor(1000 + Math.random() * 9000)}`, // Auto-gen if blank
-        date: formData.date,
-        location: formData.location,
-        products: formData.products,
-        status: "Pending", // Default status
-      }
-    ]);
+    .insert([{ 
+      date: formData.date, 
+      status: "pending" 
+    }])
+    .select("id")
+    .single();
 
-    if (error) {
-        console.error("Error inserting request:", error);
-        return { success: false, error: error.message };
-    }
+  if (requestError || !requestData) {
+    console.log("Database Error (Header):", requestError?.message);
+    return { success: false, error: requestError?.message };
+  }
 
-  // Tells Next.js to refresh the list page so the new entry shows up instantly
+  // FIXED: We take the real UUID 'id' from step 1, and insert it as the 'request_id' here!
+  const lineItems = formData.items.map((item: any, index: number) => ({
+    request_id: requestData.id, 
+    line_number: index + 1,
+    SKU: item.sku,
+    quantity: item.requestQty,
+    from_id: formData.fromLocation, 
+    to_id: formData.toLocation,
+  }));
+
+  const { error: lineItemsError } = await supabase
+    .from("materials_request_line_item")
+    .insert(lineItems);
+
+  if (lineItemsError) {
+    console.log("Database Error (Lines):", lineItemsError.message);
+    return { success: false, error: lineItemsError.message };
+  }
+
   revalidatePath("/materials-requests"); 
   return { success: true };
 }
