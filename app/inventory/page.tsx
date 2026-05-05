@@ -7,7 +7,7 @@ import type { Product } from "../lib/data";
 
 type SortKey = "name" | "category" | "qty" | "status" | "deliveries";
 type SortDir = "asc" | "desc";
-type StatusFilter = "All" | "In Stock" | "Low Stock" | "Out of Stock";
+type StatusFilter = "Alla" | "In Stock" | "Low Stock" | "Out of Stock";
 
 const STATUS_ORDER = { "Out of Stock": 0, "Low Stock": 1, "In Stock": 2 };
 
