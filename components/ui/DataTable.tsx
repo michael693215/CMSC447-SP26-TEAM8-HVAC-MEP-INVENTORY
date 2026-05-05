@@ -5,7 +5,6 @@ import {
     getPaginationRowModel,
     useReactTable,
 } from '@tanstack/react-table'
-
 import {
     Table,
     TableBody,
@@ -14,20 +13,25 @@ import {
     TableHeader,
     TableRow,
 } from '@/components/ui/table'
+import { Role } from '@/lib/types'
 
 interface DataTableProps<TData, TValue> {
     columns: ColumnDef<TData, TValue>[],
     data: TData[],
+    role: Role,
     onRowClick?: (row: TData) => void,
 }
 
-export function DataTable<TData, TValue>({ columns, data, onRowClick } : DataTableProps<TData, TValue>) 
+export function DataTable<TData, TValue>({ columns, data, role, onRowClick } : DataTableProps<TData, TValue>) 
 {
     const table = useReactTable({
         data, 
         columns, 
         getCoreRowModel: getCoreRowModel(),
         getPaginationRowModel: getPaginationRowModel(),
+        meta: {
+            role,
+        }
     })
 
     return (

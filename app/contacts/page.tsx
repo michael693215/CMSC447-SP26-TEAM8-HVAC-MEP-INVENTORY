@@ -1,14 +1,34 @@
 "use client"; // Required for the search functionality
 
-import React, { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { DataTable } from '@/components/ui/DataTable'
 import { Employee, employeeColumns } from '@/components/tables/employees/columns'
 import Link from 'next/link';
 import { useRouter } from 'next/navigation'
+import { getUserRole } from '@/lib/actions'
+import { Role } from '@/lib/types'
 
 export default function ContactsPage() {
   const router = useRouter();
+  const [role, setRole] = useState<Role>('unassigned');
+  const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+
+  useEffect(() => {
+    async function getRole() {
+      const data = await getUserRole();
+      setRole(data);
+      setIsLoading(false);
+    }
+    getRole();
+  }, [])
+  
+  if (isLoading) 
+  {
+    return (
+      <div className="flex justify-center min-h-screen items-center">Loading columns...</div>
+    )
+  }
 
   const allContacts : Employee[] = [
     { id: "1", first_name: "John", last_name: "Miller", email: "john@millerhvac.com", role: "administrator", is_active: true },
@@ -25,7 +45,7 @@ export default function ContactsPage() {
 
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-3xl font-bold text-black uppercase tracking-tight">Contact List</h1>
-          <Link href="/add-userk" className="btn-accent px-4 py-2">
+          <Link href="/add-user" className="btn-accent px-4 py-2">
             Add New Contact
           </Link>
         </div>
@@ -51,7 +71,7 @@ export default function ContactsPage() {
 
         {/* Table Section */}
         <div className="bg-white shadow-md rounded-b-lg overflow-hidden border border-gray-200">
-          <DataTable columns={ employeeColumns } data={ allContacts } onRowClick={ (user) => router.push(`contacts/${ user.id }`) } />
+          <DataTable columns={ employeeColumns } data={ allContacts } role={ role } /> 
         </div>
       </div>
     </div>
