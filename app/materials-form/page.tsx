@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 // Import your server action from the materials-requests folder
-import { logMaterialFulfillment } from '../pending-requests/actions';
+import { logMaterialFulfillment } from './actions';
 
 interface Item {
   id: string; // Using string to match the UUIDs from materials_request_line_item
@@ -66,10 +66,10 @@ export default function MaterialsForm() {
   const handleFinalSubmit = async () => {
     setIsSubmitting(true);
     
-    // Call the server action you built
     const result = await logMaterialFulfillment({
       dbId,
       items: items.map(item => ({
+        id: item.id, // <-- ADD THIS LINE! We need the SKU/ID for the database
         name: item.name,
         quantity: parseInt(item.quantity),
         specifications: item.specifications
@@ -78,7 +78,7 @@ export default function MaterialsForm() {
 
     if (result.success) {
       alert("Material request fulfilled successfully!");
-      sessionStorage.removeItem('selectedRequestData'); // Clean up
+      sessionStorage.removeItem('selectedRequestData');
       router.push('/log-delivery');
     } else {
       alert(`Error: ${result.error}`);
@@ -180,7 +180,7 @@ export default function MaterialsForm() {
               type="submit"
               className="w-full bg-blue-600 text-white font-bold text-lg py-5 rounded-xl hover:bg-blue-700 active:scale-[0.98] transition shadow-lg"
             >
-              Review Fulfillment Details
+              Review Request Fufillment Details
             </button>
           </form>
         )}

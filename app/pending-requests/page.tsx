@@ -32,9 +32,10 @@ export default function PendingRequests() {
       const currentLoc = allLocations.find(l => l.id === savedLocationId);
       setAddressName(currentLoc ? currentLoc.name : "Unknown Location");
 
-// 4. Filter and format the requests
+      // 4. Filter and format the requests
       const formatted = rawData
         .filter((req: any) => {
+          // Using to_id to determine the destination of the items
           return req.line_items?.some((item: any) => item.to_id === savedLocationId);
         })
         .map((req: any) => ({
@@ -42,6 +43,7 @@ export default function PendingRequests() {
           // Slice the ID to 8 characters and keep it lowercase to match the other table perfectly
           displayId: req.id.slice(0, 8),
           items: req.line_items
+            // Using to_id to determine the destination of the items
             .filter((item: any) => item.to_id === savedLocationId)
             .map((item: any) => ({
               // FIX: We use line_number here because the line item table doesn't have an ID
