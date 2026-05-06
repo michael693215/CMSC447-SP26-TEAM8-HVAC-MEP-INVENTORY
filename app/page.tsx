@@ -152,7 +152,7 @@ export default function MainMenu() {
       <div className="grid grid-cols-2 gap-6 w-full max-w-5xl">
         {visibleFeatures.map((feature) => (
           <Link key={feature.path} href={feature.path} className="group">
-            <div className="flex flex-col items-center justify-center p-6 sm:p-8 bg-blue-200 shadow-lg rounded-2xl border-2 border-black group-hover:border-black transition-all duration-300 cursor-pointer text-center min-h-[10rem] sm:aspect-square">
+            <div className="flex flex-col items-center justify-center p-4 sm:p-8 bg-blue-200 shadow-lg rounded-2xl border-2 border-black group-hover:border-black transition-all duration-300 cursor-pointer text-center aspect-square overflow-hidden">
               <div className="mb-3 sm:mb-5 group-hover:scale-110 transition-transform">
                 <FeatureIcon type={feature.icon} />
               </div>
