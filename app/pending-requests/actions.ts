@@ -3,7 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 
-// 1. Existing function to get the list
+
 export async function getPendingMaterialRequests() {
   const supabase = await createClient();
 
