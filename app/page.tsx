@@ -33,6 +33,12 @@ function FeatureIcon({ type }: { type: string }) {
       <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
     </svg>
   );
+  if (type === "locations") return (
+    <svg xmlns="http://www.w3.org/2000/svg" className={cls} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+    </svg>
+  );
   return null;
 }
 
@@ -67,6 +73,12 @@ export default function MainMenu() {
       path: "/contacts",
       description: "Manage contact names and emails.",
       icon: "contacts",
+    },
+    {
+      name: "Locations",
+      path: "/locations",
+      description: "View and manage job site locations.",
+      icon: "locations",
     },
     {
       name: "About",
