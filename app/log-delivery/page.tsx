@@ -38,7 +38,7 @@ export default function LogDeliveryHub() {
           onClick={() => router.push('/')} 
           className="text-blue-600 hover:underline mb-6 inline-block font-medium"
         >
-          ← Back to Home
+          ← Back to Dashboard
         </button>
 
         <header className="mb-8">

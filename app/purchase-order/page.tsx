@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { addPurchaseOrder, generatePOId, formatDeliveryDate, getAllLocations, addLocation } from "../lib/store";
 import type { Location } from "../lib/data";
+import { createClient } from "@/lib/supabase/client";
 
 interface LineItem {
   productName: string;
@@ -268,7 +269,11 @@ export default function PurchaseOrderPage() {
   const [totalPages, setTotalPages] = useState(0);
   const [previewScale, setPreviewScale] = useState(1.2);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [showDuplicate, setShowDuplicate] = useState(false);
+  const [duplicatePO, setDuplicatePO] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const supabase = createClient();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const renderTaskRef = useRef<any>(null);
 
@@ -329,19 +334,60 @@ export default function PurchaseOrderPage() {
     return form.location;
   }
 
-  function handleSubmit(e: React.SyntheticEvent) {
+  async function handleSubmit(e: React.SyntheticEvent) {
     e.preventDefault();
     const validItems = items.filter((it) => it.productName.trim() && it.qty.trim());
     if (validItems.length === 0) return;
     if (form.location === ADD_NEW_VALUE && !form.newLocation.trim()) return;
+
+    const poId = form.poNumber.trim() || generatePOId();
+    const { data: existing } = await supabase
+      .from("purchase_order")
+      .select("PO_number")
+      .eq("PO_number", poId)
+      .maybeSingle();
+
+    if (existing) {
+      setDuplicatePO(poId);
+      setShowDuplicate(true);
+      return;
+    }
+
     setShowConfirm(true);
   }
 
-  function confirmSubmit() {
+  async function confirmSubmit() {
+    if (submitting) return;
+    setSubmitting(true);
+
     const validItems = items.filter((it) => it.productName.trim() && it.qty.trim());
     const poId = form.poNumber.trim() || generatePOId();
     const locationName = resolvedLocation();
+    const isoDate = form.date || new Date().toISOString().split("T")[0];
 
+    // Insert into Supabase
+    const { error: poError } = await supabase
+      .from("purchase_order")
+      .insert([{ PO_number: poId, date: isoDate, status: "Pending", location: locationName }]);
+
+    if (poError) {
+      alert("Failed to save purchase order: " + poError.message);
+      setSubmitting(false);
+      return;
+    }
+
+    if (validItems.length > 0) {
+      await supabase.from("po_materials").insert(
+        validItems.map((it, idx) => ({
+          PO_number: poId,
+          line_number: idx + 1,
+          quantity: parseInt(it.qty, 10),
+          product_name: it.productName.trim(),
+        }))
+      );
+    }
+
+    // Keep local storage in sync
     if (form.location === ADD_NEW_VALUE && locationName) {
       const newLoc = addLocation(locationName);
       setLocations((prev) => [...prev, newLoc]);
@@ -369,6 +415,7 @@ export default function PurchaseOrderPage() {
     setSubmittedLocation(locationName);
     setShowConfirm(false);
     setSubmitted(true);
+    setSubmitting(false);
   }
 
   function handleReset() {
@@ -783,6 +830,24 @@ export default function PurchaseOrderPage() {
       </div>
     </div>
 
+    {/* Duplicate PO Modal */}
+    {showDuplicate && (
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-2xl border-2 border-black shadow-xl p-6 sm:p-8 max-w-sm w-full">
+          <h2 className="text-xl font-black uppercase mb-2 text-red-600">Duplicate Purchase Order</h2>
+          <p className="text-sm text-gray-600 mb-6">
+            PO <span className="font-mono font-bold text-black">{duplicatePO}</span> is already in the system.
+          </p>
+          <button
+            onClick={() => setShowDuplicate(false)}
+            className="btn-primary w-full"
+          >
+            Back
+          </button>
+        </div>
+      </div>
+    )}
+
     {/* Confirmation Modal */}
     {showConfirm && (
       <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -822,8 +887,10 @@ export default function PurchaseOrderPage() {
           </div>
 
           <div className="flex flex-col sm:flex-row gap-3">
-            <button onClick={confirmSubmit} className="btn-primary sm:flex-1">Confirm &amp; Submit</button>
-            <button onClick={() => setShowConfirm(false)} className="btn-secondary sm:flex-1">Edit</button>
+            <button onClick={confirmSubmit} className="btn-primary sm:flex-1" disabled={submitting}>
+              {submitting ? "Submitting…" : "Confirm & Submit"}
+            </button>
+            <button onClick={() => setShowConfirm(false)} className="btn-secondary sm:flex-1" disabled={submitting}>Edit</button>
           </div>
         </div>
       </div>
