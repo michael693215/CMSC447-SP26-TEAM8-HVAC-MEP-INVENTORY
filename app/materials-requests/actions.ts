@@ -6,8 +6,6 @@ import { revalidatePath } from "next/cache";
 export async function getMaterialRequests() {
   const supabase = await createClient();
 
-  // FIXED: Removed the fake 'request_id' column from the select query.
-  // FIXED: Changed the line item count to look for 'line_number' based on your screenshot!
   const { data, error } = await supabase
     .from("materials_request")
     .select(`
@@ -86,13 +84,13 @@ export async function getMaterialRequestById(id: string) {
   if (reqError || !request) return null;
 
   // 2. Get the connected line items
-  // NOTE: Ensure 'request_id' is the column name in materials_request_line_item 
-  // that points back to the materials_request table!
+  // ADDED 'expecting' to the select query
   const { data: lineItems, error: linesError } = await supabase
     .from("materials_request_line_item")
     .select(`
       line_number,
       quantity,
+      expecting,
       from_id,
       to_id,
       SKU,
@@ -115,6 +113,7 @@ export async function getMaterialRequestById(id: string) {
   const formattedItems = (lineItems || []).map((item: any) => ({
     line_number: item.line_number,
     quantity: item.quantity,
+    expecting: item.expecting, // Pass expecting to the frontend
     sku: item.SKU,
     description: item.materials?.description || "Unknown Material",
     from_name: locationMap.get(item.from_id) || "Unknown Source",
@@ -131,12 +130,11 @@ export async function createMaterialRequest(formData: any) {
   const supabase = await createClient();
 
   // 1. Insert the "Header" (The main request entry)
-  // We let Supabase generate the UUID 'id' automatically
   const { data: requestData, error: requestError } = await supabase
     .from("materials_request")
     .insert([{ 
       date: formData.date, 
-      status: "pending" // Matching your lowercase database Enum
+      status: "pending" 
     }])
     .select("id")
     .single();
@@ -147,12 +145,12 @@ export async function createMaterialRequest(formData: any) {
   }
 
   // 2. Prepare the Line Items
-  // We use the 'id' we just got from the insert above to link these items
   const lineItems = formData.items.map((item: any, index: number) => ({
     request_id: requestData.id, 
     line_number: index + 1,
     SKU: item.sku,
     quantity: item.requestQty,
+    expecting: item.requestQty, // NEW: Expecting and Quantity start identical
     from_id: formData.fromLocation, 
     to_id: formData.toLocation,
   }));

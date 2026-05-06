@@ -16,7 +16,8 @@ interface CartItem {
   sku: string;
   description: string;
   maxQty: number; 
-  requestQty: number; 
+  // Allow string so the user can temporarily clear the box while typing
+  requestQty: number | string; 
 }
 
 export default function NewMaterialsRequest() {
@@ -31,9 +32,14 @@ export default function NewMaterialsRequest() {
   const [toLocation, setToLocation] = useState("");
   const [cart, setCart] = useState<CartItem[]>([]);
 
-  // State for controlling the custom dropdowns
   const [fromOpen, setFromOpen] = useState(false);
   const [toOpen, setToOpen] = useState(false);
+
+  useEffect(() => {
+    const today = new Date();
+    const localDate = new Date(today.getTime() - (today.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+    setDate(localDate);
+  }, []);
 
   useEffect(() => {
     async function load() {
@@ -70,11 +76,29 @@ export default function NewMaterialsRequest() {
     }]);
   };
 
-  const updateCartQty = (sku: string, inputQty: number, maxQty: number) => {
-    let finalQty = inputQty;
-    if (finalQty > maxQty) finalQty = maxQty;
-    if (finalQty < 1 || isNaN(finalQty)) finalQty = 1;
-    setCart(cart.map(c => c.sku === sku ? { ...c, requestQty: finalQty } : c));
+  // ONLY updates the state with what the user types (allows empty string)
+  const updateCartQty = (sku: string, val: string) => {
+    if (val === '') {
+      setCart(cart.map(c => c.sku === sku ? { ...c, requestQty: '' } : c));
+      return;
+    }
+    const num = parseInt(val);
+    if (!isNaN(num)) {
+      setCart(cart.map(c => c.sku === sku ? { ...c, requestQty: num } : c));
+    }
+  };
+
+  // Runs onBlur (when user clicks away) to correct the value
+  const clampCartQty = (sku: string, maxQty: number) => {
+    setCart(cart.map(c => {
+      if (c.sku === sku) {
+        let num = parseInt(c.requestQty.toString());
+        if (isNaN(num) || num < 1) num = 1;
+        if (num > maxQty) num = maxQty;
+        return { ...c, requestQty: num };
+      }
+      return c;
+    }));
   };
 
   const removeFromCart = (sku: string) => {
@@ -88,12 +112,23 @@ export default function NewMaterialsRequest() {
       return;
     }
     setIsSubmitting(true);
+    
+    // Safety check: Final clamp of values right before sending to database
+    // in case the user clicked submit without clicking away from the input first
+    const safeCart = cart.map(c => {
+      let num = parseInt(c.requestQty.toString());
+      if (isNaN(num) || num < 1) num = 1;
+      if (num > c.maxQty) num = c.maxQty;
+      return { ...c, requestQty: num };
+    });
+
     const result = await createMaterialRequest({
       date,
       fromLocation,
       toLocation,
-      items: cart
+      items: safeCart
     });
+
     if (result.success) {
       alert("Material Request Submitted Successfully!");
       router.push("/materials-requests");
@@ -115,7 +150,6 @@ export default function NewMaterialsRequest() {
         <form onSubmit={handleSubmit} className="space-y-8">
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* DATE */}
             <div>
               <label className="block text-xs font-bold text-slate-700 uppercase mb-2">Date *</label>
               <input
@@ -127,7 +161,6 @@ export default function NewMaterialsRequest() {
               />
             </div>
             
-            {/* SOURCE (CUSTOM DROPDOWN) */}
             <div className="relative">
               <label className="block text-xs font-bold text-slate-700 uppercase mb-2">From (Source) *</label>
               <button
@@ -158,7 +191,6 @@ export default function NewMaterialsRequest() {
               )}
             </div>
 
-            {/* DESTINATION (CUSTOM DROPDOWN) */}
             <div className="relative">
               <label className="block text-xs font-bold text-slate-700 uppercase mb-2">To (Destination) *</label>
               <button
@@ -192,7 +224,6 @@ export default function NewMaterialsRequest() {
             </div>
           </div>
 
-          {/* INVENTORY TABLE */}
           {fromLocation && (
             <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
               <h3 className="text-xs font-bold text-blue-900 uppercase mb-3">Available at Source</h3>
@@ -228,7 +259,6 @@ export default function NewMaterialsRequest() {
             </div>
           )}
 
-          {/* CART ITEMS */}
           {cart.length > 0 && (
             <div className="space-y-3">
               <h3 className="text-xs font-bold text-slate-700 uppercase">Selected Items</h3>
@@ -239,7 +269,10 @@ export default function NewMaterialsRequest() {
                     <input
                       type="number"
                       value={item.requestQty}
-                      onChange={(e) => updateCartQty(item.sku, parseInt(e.target.value), item.maxQty)}
+                      // Fire update during typing
+                      onChange={(e) => updateCartQty(item.sku, e.target.value)}
+                      // Fire clamp when user clicks outside the input
+                      onBlur={() => clampCartQty(item.sku, item.maxQty)}
                       className="w-16 p-1 border border-gray-300 rounded text-center font-mono"
                     />
                     <span className="text-xs text-gray-500">/ {item.maxQty}</span>

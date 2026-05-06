@@ -34,25 +34,27 @@ export default function PendingRequests() {
 
       // 4. Filter and format the requests
       const formatted = rawData
-        .filter((req: any) => {
-          // Using to_id to determine the destination of the items
-          return req.line_items?.some((item: any) => item.to_id === savedLocationId);
-        })
-        .map((req: any) => ({
-          id: req.id,
-          // Slice the ID to 8 characters and keep it lowercase to match the other table perfectly
-          displayId: req.id.slice(0, 8),
-          items: req.line_items
-            // Using to_id to determine the destination of the items
-            .filter((item: any) => item.to_id === savedLocationId)
-            .map((item: any) => ({
-              // FIX: We use line_number here because the line item table doesn't have an ID
+        .map((req: any) => {
+          // Find items for this location that STILL have a pending 'expecting' balance
+          const pendingItemsForLocation = (req.line_items || []).filter((item: any) => {
+            const expectedAmount = item.expecting ?? item.quantity;
+            return item.to_id === savedLocationId && expectedAmount > 0;
+          });
+
+          return {
+            id: req.id,
+            displayId: req.id.slice(0, 8),
+            items: pendingItemsForLocation.map((item: any) => ({
               id: item.line_number.toString(), 
               line_number: item.line_number,
               name: item.materials?.description || "Unknown Material",
-              quantity: item.quantity
+              // Pass 'expecting' as the quantity so the fulfillment form uses the remaining balance!
+              quantity: item.expecting ?? item.quantity 
             }))
-        }));
+          };
+        })
+        // Remove any requests that don't have any pending items left for this location
+        .filter((req: any) => req.items.length > 0);
 
       setLocationRequests(formatted);
       setIsLoading(false);

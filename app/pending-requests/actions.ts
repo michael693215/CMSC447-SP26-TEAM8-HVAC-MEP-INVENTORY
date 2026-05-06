@@ -15,6 +15,7 @@ export async function getPendingMaterialRequests() {
       status,
       line_items:materials_request_line_item (
         quantity,
+        expecting,
         to_id,
         line_number,
         materials ( description )

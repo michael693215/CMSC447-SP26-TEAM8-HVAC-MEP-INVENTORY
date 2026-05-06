@@ -1,4 +1,3 @@
-// File: app/manual-entry/page.tsx
 "use client";
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
@@ -13,14 +12,26 @@ interface Item {
 export default function ManualEntry() {
   const router = useRouter();
   const [poNumber, setPoNumber] = useState('');
+  
+  // NEW: Date state initialized empty to prevent hydration errors
+  const [date, setDate] = useState(''); 
+  
   const [items, setItems] = useState<Item[]>([
     { id: Date.now(), name: '', quantity: '', specifications: '' }
   ]);
   
   const [isReviewMode, setIsReviewMode] = useState(false);
   
-  // NEW: State to track where the user came from
+  // State to track where the user came from
   const [isFromPending, setIsFromPending] = useState(false);
+
+  // Use a separate useEffect just for setting today's date
+  useEffect(() => {
+    const today = new Date();
+    // Adjust for local timezone offset so it doesn't accidentally grab "tomorrow" in UTC
+    const localDate = new Date(today.getTime() - (today.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+    setDate(localDate);
+  }, []);
 
   useEffect(() => {
     const scannedData = sessionStorage.getItem('scannedSlipData');
@@ -81,7 +92,8 @@ export default function ManualEntry() {
   };
 
   const handleFinalSubmit = () => {
-    const formData = { poNumber, items };
+    // You can now include `date` in your submission payload
+    const formData = { poNumber, date, items };
     console.log("FINAL SUBMISSION TO DB:", formData);
     alert("Delivery successfully logged!");
     router.push('/log-delivery'); 
@@ -110,27 +122,40 @@ export default function ManualEntry() {
         {/* --- VIEW 1: THE FORM --- */}
         {!isReviewMode && (
           <form onSubmit={handleProceedToReview} className="space-y-8">
-            <div className="bg-gray-50 p-6 rounded-xl border border-gray-200">
-              <label className="block text-sm font-bold text-gray-700 mb-2">PO Number</label>
-              <input 
-                type="text" 
-                value={poNumber}
-                onChange={(e) => setPoNumber(e.target.value)}
-                readOnly={isFromPending}
-                placeholder="e.g. PO-102938"
-                // UPDATED: Dynamically change styling if locked
-                className={`w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition
-                  ${isFromPending 
-                    ? 'bg-gray-100 border-gray-200 text-gray-500 cursor-not-allowed font-medium' 
-                    : 'bg-white border-gray-300 text-gray-900'}`}
-                required
-              />
+            
+            {/* NEW: Placed PO Number and Date in a side-by-side grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-gray-50 p-6 rounded-xl border border-gray-200">
+                <label className="block text-sm font-bold text-gray-700 mb-2">PO Number</label>
+                <input 
+                  type="text" 
+                  value={poNumber}
+                  onChange={(e) => setPoNumber(e.target.value)}
+                  readOnly={isFromPending}
+                  placeholder="e.g. PO-102938"
+                  className={`w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition
+                    ${isFromPending 
+                      ? 'bg-gray-100 border-gray-200 text-gray-500 cursor-not-allowed font-medium' 
+                      : 'bg-white border-gray-300 text-gray-900'}`}
+                  required
+                />
+              </div>
+
+              <div className="bg-gray-50 p-6 rounded-xl border border-gray-200">
+                <label className="block text-sm font-bold text-gray-700 mb-2">Date Received</label>
+                <input 
+                  type="date" 
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  className="w-full p-3 border border-gray-300 bg-white text-gray-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition font-medium"
+                  required
+                />
+              </div>
             </div>
 
             <div className="bg-gray-50 p-6 rounded-xl border border-gray-200">
               <div className="flex justify-between items-center mb-4">
                 <h2 className="text-xl font-bold">Items Received</h2>
-                {/* UPDATED: Only show Add Item if NOT from pending deliveries */}
                 {!isFromPending && (
                   <button 
                     type="button"
@@ -147,7 +172,6 @@ export default function ManualEntry() {
                   <div key={item.id} className="p-4 bg-white border border-gray-200 rounded-lg shadow-sm relative">
                     <div className="flex justify-between items-center mb-3">
                       <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider">Item {index + 1}</h3>
-                      {/* UPDATED: Only show Remove Item if NOT from pending deliveries */}
                       {!isFromPending && items.length > 1 && (
                         <button
                           type="button"
@@ -175,7 +199,6 @@ export default function ManualEntry() {
                       
                       <div className="md:col-span-3">
                         <label className="block text-xs font-semibold text-gray-600 mb-1">Quantity</label>
-                        {/* Quantity input remains editable in both modes */}
                         <div className="flex items-center border border-gray-300 rounded-md overflow-hidden bg-white focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500 transition-all">
                           <button
                             type="button"
@@ -188,7 +211,6 @@ export default function ManualEntry() {
                             type="number" 
                             value={item.quantity}
                             onChange={(e) => updateItem(item.id, 'quantity', e.target.value)}
-                            // NEW: Selects the entire number when the user clicks the box
                             onFocus={(e) => e.target.select()}
                             className="w-full p-2 text-center focus:outline-none appearance-none bg-transparent font-bold text-gray-900"
                             style={{ MozAppearance: 'textfield' }}
@@ -239,12 +261,20 @@ export default function ManualEntry() {
                   <p className="text-sm text-gray-500 font-bold uppercase tracking-wider mb-1">Purchase Order</p>
                   <p className="text-2xl font-bold text-gray-900">{poNumber}</p>
                 </div>
-                <button 
-                  onClick={() => setIsReviewMode(false)}
-                  className="text-blue-600 text-sm font-semibold hover:underline"
-                >
-                  Edit PO
-                </button>
+                
+                {/* NEW: Review mode Date display + shifted the Edit button */}
+                <div className="text-right flex flex-col items-end gap-2">
+                  <div>
+                     <p className="text-sm text-gray-500 font-bold uppercase tracking-wider mb-1">Date</p>
+                     <p className="text-xl font-medium text-gray-900">{date}</p>
+                  </div>
+                  <button 
+                    onClick={() => setIsReviewMode(false)}
+                    className="text-blue-600 text-sm font-semibold hover:underline"
+                  >
+                    Edit Details
+                  </button>
+                </div>
               </div>
               
               <div className="p-0">
@@ -291,4 +321,3 @@ export default function ManualEntry() {
     </div>
   );
 }
-
