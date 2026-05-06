@@ -44,7 +44,7 @@ function FeatureIcon({ type }: { type: string }) {
     <svg xmlns="http://www.w3.org/2000/svg" className={cls} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
     </svg>
-  );
+    )
   if (type === "locations") return (
     <svg xmlns="http://www.w3.org/2000/svg" className={cls} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
@@ -152,7 +152,7 @@ export default function MainMenu() {
       <div className="grid grid-cols-2 gap-6 w-full max-w-5xl">
         {visibleFeatures.map((feature) => (
           <Link key={feature.path} href={feature.path} className="group">
-            <div className="flex flex-col items-center justify-center p-6 sm:p-8 bg-blue-200 shadow-lg rounded-2xl border-2 border-black group-hover:border-black transition-all duration-300 cursor-pointer text-center min-h-[10rem] sm:aspect-square">
+            <div className="flex flex-col items-center justify-center p-4 sm:p-8 bg-blue-200 shadow-lg rounded-2xl border-2 border-black group-hover:border-black transition-all duration-300 cursor-pointer text-center aspect-square overflow-hidden">
               <div className="mb-3 sm:mb-5 group-hover:scale-110 transition-transform">
                 <FeatureIcon type={feature.icon} />
               </div>

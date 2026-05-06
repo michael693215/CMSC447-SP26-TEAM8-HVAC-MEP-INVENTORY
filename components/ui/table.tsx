@@ -4,6 +4,58 @@ import * as React from "react"
 
 import { cn } from "@/lib/utils"
 
+// ── Shared sort utilities ──────────────────────────────────────────────────
+
+export type SortDir = "asc" | "desc"
+
+export function SortArrow({ active, dir }: { active: boolean; dir: SortDir }) {
+  if (!active)
+    return (
+      <svg xmlns="http://www.w3.org/2000/svg" className="inline w-3 h-3 ml-1 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
+        <path d="M5 12l5-5 5 5H5z" />
+      </svg>
+    )
+  return dir === "asc" ? (
+    <svg xmlns="http://www.w3.org/2000/svg" className="inline w-3 h-3 ml-1" viewBox="0 0 20 20" fill="currentColor">
+      <path d="M5 12l5-5 5 5H5z" />
+    </svg>
+  ) : (
+    <svg xmlns="http://www.w3.org/2000/svg" className="inline w-3 h-3 ml-1" viewBox="0 0 20 20" fill="currentColor">
+      <path d="M15 8l-5 5-5-5h10z" />
+    </svg>
+  )
+}
+
+interface SortableHeadProps extends React.ComponentProps<"th"> {
+  active: boolean
+  dir: SortDir
+  onToggle: () => void
+  sticky?: boolean
+  center?: boolean
+}
+
+export function SortableHead({
+  active, dir, onToggle, sticky, center, children, className, ...props
+}: SortableHeadProps) {
+  return (
+    <th
+      className={cn(
+        "p-3 sm:p-4 border-b cursor-pointer select-none hover:bg-black/5 whitespace-nowrap",
+        sticky && "sticky left-0 z-20 bg-blue-200 hover:bg-blue-300",
+        center && "text-center",
+        className
+      )}
+      onClick={onToggle}
+      {...props}
+    >
+      {children}
+      <SortArrow active={active} dir={dir} />
+    </th>
+  )
+}
+
+// ── Shadcn base table components ───────────────────────────────────────────
+
 function Table({ className, ...props }: React.ComponentProps<"table">) {
   return (
     <div

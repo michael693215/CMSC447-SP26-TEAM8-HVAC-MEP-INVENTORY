@@ -94,7 +94,7 @@ export async function getMaterialRequestById(id: string) {
       from_id,
       to_id,
       SKU,
-      materials!inner (
+      materials (
         description
       )
     `)

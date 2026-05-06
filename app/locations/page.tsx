@@ -233,7 +233,7 @@ export default function LocationsPage() {
     if (error) {
       setError(error.message);
     } else {
-      setLocations((data as LocationRow[]) ?? []);
+      setLocations((data as unknown as LocationRow[]) ?? []);
     }
     setLoading(false);
   }
