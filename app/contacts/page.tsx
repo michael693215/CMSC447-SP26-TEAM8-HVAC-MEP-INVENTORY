@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { DataTable } from '@/components/ui/DataTable'
-import { Employee, employeeColumns } from '@/components/tables/employees/columns'
+import { Employee, employeeColumns } from '@/components/columns/Employee'
 import Link from 'next/link';
 import { useRouter } from 'next/navigation'
 import { getUserRole } from '@/lib/actions'

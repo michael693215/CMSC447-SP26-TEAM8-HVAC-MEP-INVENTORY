@@ -14,5 +14,6 @@ export const ROUTE_PERMISSIONS : Record<string, string[]>= {
     '/purchase-orders': ['administrator', 'project_manager'],
     '/materials-requests': ['administrator', 'foreman'],
     '/contacts': ['administrator', 'project_manager'],
-    'locations': ['administrator'],
+    '/locations': ['administrator'],
+    '/user-pages': ['administrator'],
 }
