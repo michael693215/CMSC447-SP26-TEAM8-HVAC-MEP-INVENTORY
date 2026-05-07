@@ -1,9 +1,10 @@
 "use client";
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { logDeliveryFulfillment } from './actions'; // <-- NEW: Imported your backend action
 
 interface Item {
-  id: number;
+  id: number | string; // Updated to allow string since line_numbers come over as strings
   name: string;
   quantity: string;
   specifications: string;
@@ -15,9 +16,11 @@ export default function ManualEntry() {
   
   // NEW: Date state initialized empty to prevent hydration errors
   const [date, setDate] = useState(''); 
+  const [locationId, setLocationId] = useState(''); // <-- NEW: Track the warehouse UUID
+  const [isSubmitting, setIsSubmitting] = useState(false); // <-- NEW: Track loading state
   
   const [items, setItems] = useState<Item[]>([
-    { id: Date.now(), name: '', quantity: '', specifications: '' }
+    { id: '1', name: '', quantity: '', specifications: '' } // Set default ID to 1
   ]);
   
   const [isReviewMode, setIsReviewMode] = useState(false);
@@ -36,6 +39,11 @@ export default function ManualEntry() {
   useEffect(() => {
     const scannedData = sessionStorage.getItem('scannedSlipData');
     const tableData = sessionStorage.getItem('selectedDeliveryData');
+    const storedLocation = sessionStorage.getItem('deliveryLocation'); // <-- NEW: Grab location
+    
+    if (storedLocation) {
+      setLocationId(storedLocation);
+    }
     
     if (scannedData) {
       try {
@@ -44,7 +52,7 @@ export default function ManualEntry() {
         if (parsedData.PO) setPoNumber(parsedData.PO);
         if (parsedData.lineItems && parsedData.lineItems.length > 0) {
           const formattedItems = parsedData.lineItems.map((item: any, index: number) => ({
-            id: Date.now() + index,
+            id: (index + 1).toString(), // FIX: Set ID to exact line numbers (1, 2, 3...)
             name: item.description || '',
             quantity: item.quantityShipped?.toString() || '',
             specifications: item.specifications || ''
@@ -72,16 +80,18 @@ export default function ManualEntry() {
   }, []);
 
   const handleAddItem = () => {
-    setItems([...items, { id: Date.now(), name: '', quantity: '', specifications: '' }]);
+    // FIX: Assign the next logical line number so the DB can match it
+    const newId = (items.length + 1).toString();
+    setItems([...items, { id: newId, name: '', quantity: '', specifications: '' }]);
   };
 
-  const handleRemoveItem = (idToRemove: number) => {
+  const handleRemoveItem = (idToRemove: number | string) => {
     if (items.length > 1) {
       setItems(items.filter(item => item.id !== idToRemove));
     }
   };
 
-  const updateItem = (id: number, field: keyof Item, value: string) => {
+  const updateItem = (id: number | string, field: keyof Item, value: string) => {
     setItems(items.map(item => item.id === id ? { ...item, [field]: value } : item));
   };
 
@@ -91,12 +101,47 @@ export default function ManualEntry() {
     window.scrollTo(0, 0); 
   };
 
-  const handleFinalSubmit = () => {
-    // You can now include `date` in your submission payload
-    const formData = { poNumber, date, items };
-    console.log("FINAL SUBMISSION TO DB:", formData);
-    alert("Delivery successfully logged!");
-    router.push('/log-delivery'); 
+  // --- NEW: Wired up the final submit to the backend action ---
+  const handleFinalSubmit = async () => {
+    if (!locationId) {
+      alert("Error: No delivery location set. Please return to the hub and select a location.");
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    // Format items for the backend
+    const payloadItems = items
+      .map(item => ({
+        id: item.id.toString(), // The backend uses this to match line_number
+        quantity: parseInt(item.quantity || "0", 10)
+      }))
+      .filter(item => item.quantity > 0); // Only send items they actually received
+
+    if (payloadItems.length === 0) {
+      alert("Please enter a quantity for at least one item before submitting.");
+      setIsSubmitting(false);
+      return;
+    }
+
+    const result = await logDeliveryFulfillment({
+      poNumber: poNumber,
+      locationId: locationId,
+      items: payloadItems
+    });
+
+    if (result.success) {
+      alert("Delivery successfully logged!");
+      // Send them back to pending deliveries if they were processing one, otherwise to the hub
+      if (isFromPending) {
+        router.push('/pending-deliveries');
+      } else {
+        router.push('/log-delivery'); 
+      }
+    } else {
+      alert("Failed to log delivery: " + result.error);
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -123,7 +168,6 @@ export default function ManualEntry() {
         {!isReviewMode && (
           <form onSubmit={handleProceedToReview} className="space-y-8">
             
-            {/* NEW: Placed PO Number and Date in a side-by-side grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="bg-gray-50 p-6 rounded-xl border border-gray-200">
                 <label className="block text-sm font-bold text-gray-700 mb-2">PO Number</label>
@@ -262,7 +306,6 @@ export default function ManualEntry() {
                   <p className="text-2xl font-bold text-gray-900">{poNumber}</p>
                 </div>
                 
-                {/* NEW: Review mode Date display + shifted the Edit button */}
                 <div className="text-right flex flex-col items-end gap-2">
                   <div>
                      <p className="text-sm text-gray-500 font-bold uppercase tracking-wider mb-1">Date</p>
@@ -270,7 +313,8 @@ export default function ManualEntry() {
                   </div>
                   <button 
                     onClick={() => setIsReviewMode(false)}
-                    className="text-blue-600 text-sm font-semibold hover:underline"
+                    className="text-blue-600 text-sm font-semibold hover:underline disabled:opacity-50"
+                    disabled={isSubmitting}
                   >
                     Edit Details
                   </button>
@@ -302,16 +346,18 @@ export default function ManualEntry() {
             <div className="flex flex-col sm:flex-row gap-4 pt-4">
               <button 
                 onClick={() => setIsReviewMode(false)}
-                className="w-full sm:w-1/3 py-4 text-gray-600 font-bold bg-gray-100 rounded-xl hover:bg-gray-200 transition active:scale-[0.98]"
+                disabled={isSubmitting}
+                className="w-full sm:w-1/3 py-4 text-gray-600 font-bold bg-gray-100 rounded-xl hover:bg-gray-200 transition active:scale-[0.98] disabled:opacity-50"
               >
                 Make Changes
               </button>
               
               <button 
                 onClick={handleFinalSubmit}
-                className="w-full sm:w-2/3 py-4 text-white font-bold bg-green-600 rounded-xl hover:bg-green-700 transition shadow-md active:scale-[0.98]"
+                disabled={isSubmitting}
+                className="w-full sm:w-2/3 py-4 text-white font-bold bg-green-600 rounded-xl hover:bg-green-700 transition shadow-md active:scale-[0.98] disabled:bg-gray-400"
               >
-                Confirm & Submit Order
+                {isSubmitting ? "Processing..." : "Confirm & Submit Order"}
               </button>
             </div>
           </div>

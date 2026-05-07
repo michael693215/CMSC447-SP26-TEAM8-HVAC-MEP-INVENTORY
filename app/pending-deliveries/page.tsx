@@ -2,50 +2,65 @@
 "use client";
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-
-const FAKE_DELIVERIES = [
-  {
-    id: 1,
-    location: "Location 1",
-    poNumber: "PO-550192",
-    items: [
-      { id: 101, name: "Galvanized Steel Pipes", quantity: "150", specifications: "2-inch diameter, 10ft length" },
-      { id: 102, name: "Pipe Fittings", quantity: "300", specifications: "Elbow, 90 degree" }
-    ]
-  },
-  {
-    id: 2,
-    location: "Location 1",
-    poNumber: "PO-550198",
-    items: [
-      { id: 103, name: "Drywall Sheets", quantity: "80", specifications: "1/2 inch thick, 4x8" }
-    ]
-  },
-  {
-    id: 3,
-    location: "Location 2",
-    poNumber: "PO-772004",
-    items: [
-      { id: 104, name: "Roofing Shingles", quantity: "50", specifications: "Asphalt, Architectural, Weathered Wood" },
-      { id: 105, name: "Roofing Nails", quantity: "10000", specifications: "1-1/4 inch, Galvanized" },
-      { id: 106, name: "Underlayment", quantity: "10", specifications: "Synthetic, 1000 sq ft roll" }
-    ]
-  }
-];
+import { getPendingDeliveries } from './actions';
+import { getLocations } from '../materials-requests/actions';
 
 export default function PendingDeliveries() {
   const router = useRouter();
-  const [currentLocation, setCurrentLocation] = useState('Location 1');
-  const [locationDeliveries, setLocationDeliveries] = useState(FAKE_DELIVERIES);
+  const [currentLocation, setCurrentLocation] = useState('Loading address...');
+  const [locationDeliveries, setLocationDeliveries] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const savedLocation = sessionStorage.getItem('deliveryLocation');
-    if (savedLocation) {
-      setCurrentLocation(savedLocation);
-      // Save ONLY the deliveries for this location as our base list
-      setLocationDeliveries(FAKE_DELIVERIES.filter(d => d.location === savedLocation));
+    async function loadData() {
+      const savedLocationId = sessionStorage.getItem('deliveryLocation');
+      if (!savedLocationId) {
+        setIsLoading(false);
+        return;
+      }
+
+      // Fetch locations and pending POs from Supabase
+      const [allLocations, rawData] = await Promise.all([
+        getLocations(),
+        getPendingDeliveries()
+      ]);
+
+      // Set the pretty location name
+      const currentLoc = allLocations.find(l => l.id === savedLocationId);
+      if (currentLoc) {
+        setCurrentLocation(currentLoc.name);
+      } else {
+        setCurrentLocation("Unknown Location");
+      }
+
+      // Filter and map the database records into the format your UI expects
+      const formatted = rawData
+        .filter((po: any) => po.location_id === savedLocationId)
+        .map((po: any) => {
+          const pendingItems = (po.po_materials || []).filter((item: any) => {
+            const expectedAmount = item.expecting ?? item.quantity;
+            return expectedAmount > 0;
+          });
+
+          return {
+            id: po.PO_number,
+            poNumber: po.PO_number,
+            items: pendingItems.map((item: any) => ({
+              id: item.line_number,
+              name: item.product_name || "Unknown Product",
+              quantity: (item.expecting ?? item.quantity).toString(), // UI displays expecting amount
+              specifications: "" // Prevents search crash if no specs exist
+            }))
+          };
+        })
+        .filter((po: any) => po.items.length > 0);
+
+      setLocationDeliveries(formatted);
+      setIsLoading(false);
     }
+
+    loadData();
   }, []);
 
   const handleSelectDelivery = (delivery: any) => {
@@ -53,7 +68,7 @@ export default function PendingDeliveries() {
     router.push('/manual-entry'); 
   };
 
-  // --- NEW: Dynamic Search Filtering ---
+  // --- Dynamic Search Filtering ---
   const displayedDeliveries = locationDeliveries.filter((delivery) => {
     if (!searchQuery) return true; // If search is empty, show all
 
@@ -65,7 +80,7 @@ export default function PendingDeliveries() {
     }
 
     // 2. Check if ANY item name or specification matches
-    const hasMatchingItem = delivery.items.some(item => 
+    const hasMatchingItem = delivery.items.some((item: any) => 
       item.name.toLowerCase().includes(query) || 
       item.specifications.toLowerCase().includes(query)
     );
@@ -78,7 +93,7 @@ export default function PendingDeliveries() {
       <div className="max-w-6xl mx-auto">
         
         <button 
-          onClick={() => router.back()} 
+          onClick={() => router.push('/scanner')} 
           className="text-blue-600 hover:underline mb-6 inline-block font-medium"
         >
           ← Back to Scanner
@@ -91,7 +106,7 @@ export default function PendingDeliveries() {
           </p>
         </header>
 
-        {/* --- NEW: Search Bar UI --- */}
+        {/* --- Search Bar UI --- */}
         <div className="mb-6 relative">
           <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
             <svg className="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
@@ -117,44 +132,55 @@ export default function PendingDeliveries() {
               </tr>
             </thead>
             <tbody>
-              {displayedDeliveries.map((delivery) => (
-                <tr 
-                  key={delivery.id} 
-                  onClick={() => handleSelectDelivery(delivery)}
-                  className="border-b border-gray-100 hover:bg-blue-50 cursor-pointer transition"
-                >
-                  <td className="p-4 font-bold text-gray-900">{delivery.poNumber}</td>
-                  <td className="p-4">
-                    <ul className="text-sm text-gray-600 list-disc list-inside">
-                      {delivery.items.map((item: any) => (
-                        <li key={item.id}>
-                          <span className="font-semibold text-gray-800">{item.quantity}x</span> {item.name} <span className="text-gray-400">({item.specifications})</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </td>
-                  <td className="p-4 text-right">
-                    <button className="bg-blue-100 text-blue-700 px-4 py-2 rounded-lg font-semibold hover:bg-blue-200 transition active:scale-95">
-                      Select →
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              
-              {/* Empty States */}
-              {locationDeliveries.length === 0 && (
+              {isLoading ? (
                 <tr>
-                  <td colSpan={3} className="p-8 text-center text-gray-500 italic">
-                    No pending deliveries found for this location.
+                  <td colSpan={3} className="p-8 text-center text-gray-500 font-medium">
+                    Loading pending deliveries...
                   </td>
                 </tr>
-              )}
-              {locationDeliveries.length > 0 && displayedDeliveries.length === 0 && (
-                <tr>
-                  <td colSpan={3} className="p-8 text-center text-gray-500 italic">
-                    No results found for &quot;<span className="font-semibold">{searchQuery}</span>&quot;
-                  </td>
-                </tr>
+              ) : (
+                <>
+                  {displayedDeliveries.map((delivery) => (
+                    <tr 
+                      key={delivery.id} 
+                      onClick={() => handleSelectDelivery(delivery)}
+                      className="border-b border-gray-100 hover:bg-blue-50 cursor-pointer transition"
+                    >
+                      <td className="p-4 font-bold text-gray-900">{delivery.poNumber}</td>
+                      <td className="p-4">
+                        <ul className="text-sm text-gray-600 list-disc list-inside">
+                          {delivery.items.map((item: any) => (
+                            <li key={item.id}>
+                              <span className="font-semibold text-gray-800">{item.quantity}x</span> {item.name} 
+                              {item.specifications && <span className="text-gray-400">({item.specifications})</span>}
+                            </li>
+                          ))}
+                        </ul>
+                      </td>
+                      <td className="p-4 text-right">
+                        <button className="bg-blue-100 text-blue-700 px-4 py-2 rounded-lg font-semibold hover:bg-blue-200 transition active:scale-95">
+                          Select →
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  
+                  {/* Empty States */}
+                  {!isLoading && locationDeliveries.length === 0 && (
+                    <tr>
+                      <td colSpan={3} className="p-8 text-center text-gray-500 italic">
+                        No pending deliveries found for this location.
+                      </td>
+                    </tr>
+                  )}
+                  {!isLoading && locationDeliveries.length > 0 && displayedDeliveries.length === 0 && (
+                    <tr>
+                      <td colSpan={3} className="p-8 text-center text-gray-500 italic">
+                        No results found for &quot;<span className="font-semibold">{searchQuery}</span>&quot;
+                      </td>
+                    </tr>
+                  )}
+                </>
               )}
             </tbody>
           </table>
