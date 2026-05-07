@@ -22,7 +22,7 @@ export const employeeColumns: ColumnDef<Employee>[] = [
     {
         id: 'full_name',
         header: 'Name',
-        accessorFn: (row) => `${row.first_name} ${row.last_name}`,
+        accessorFn: (row) => `${row.first_name} ${row.last_name || ''}`,
     },
     {
         accessorKey: 'email',

@@ -77,8 +77,11 @@ export default function UserPage()
                                         setModalResult(result);
                                         if (result.success) 
                                         {
+                                            data.first_name = typeof firstName === 'string' ? firstName : data.first_name;
+                                            data.last_name = typeof lastName === 'string' ? lastName : data.last_name;
                                             setModalResult(null);
                                             close();
+                                            router.refresh();
                                         } 
                                         } }>
                                         <label>First Name:</label>
@@ -119,8 +122,10 @@ export default function UserPage()
                                     setModalResult(result);
                                     if (result.success)
                                     {
+                                        data.email = typeof email === 'string' ? email : data.email;
                                         setModalResult(null);
                                         close();
+                                        router.refresh();
                                     }
                                 } }>
                                     <label>New Email:</label>
@@ -151,8 +156,10 @@ export default function UserPage()
                                     setModalResult(result);
                                     if (result.success)
                                     {
+                                        data.role = typeof role === 'string' ? role as Role : data.role;
                                         setModalResult(null);
                                         close();
+                                        router.refresh();
                                     }
                                 } }>
                                     <label>Select Role:</label>
@@ -222,8 +229,10 @@ export default function UserPage()
                                     setModalResult(result);
                                     if (result.success)
                                     {
+                                        data.is_active = answer ? !data.is_active : data.is_active;
                                         setModalResult(null);
                                         close();
+                                        router.refresh();
                                     }
                                 } }>
                                         <label>Type "Confirm" to consolidate change:</label>
@@ -233,7 +242,6 @@ export default function UserPage()
                                             placeholder='Confirm'
                                             className="w-full border p-2"
                                             required/>
-
                                         { modalResult && (!modalResult.success && <p className='text-red-600'>{ modalResult.error }</p>) }
                                         <div className='flex justify-end gap-4'>
                                             <button className='w-min btn-secondary' onClick={ () => { setModalResult(null); close(); } }>Cancel</button> 
