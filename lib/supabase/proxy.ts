@@ -41,8 +41,9 @@ export async function updateSession(request: NextRequest) {
   // with the Supabase client, your users may be randomly logged out.
   const { data } = await supabase.auth.getClaims()
 
-  const user = data?.claims
-  const role = user?.app_metadata?.permissions || 'unassigned'
+  const user = data?.claims;
+  const role = user?.app_metadata?.permissions || 'unassigned';
+  const id = user?.app_metadata?.id || null;
 
   if (
     !user &&
@@ -79,8 +80,20 @@ const matchedRoute = sortedRoutes.find(route =>
 // 3. Get the roles for that specific match
 const allowedRoles = matchedRoute ? ROUTE_PERMISSIONS[matchedRoute] : null;
 
+const authorized = (role : string, route : string, allowed : string[] | null, id : string | null) => {
+  if (route.includes('/user-pages') && id != route.split('/').pop() && role !== 'administrator')
+  {
+    return false;
+  }
+  if (allowed && !allowed.includes(role))
+  {
+    return false;
+  }
+  return true;
+};
+
 // 4. Run the check
-if (allowedRoles && !allowedRoles.includes(role)) {
+if (matchedRoute !== undefined && !authorized(role, matchedRoute, allowedRoles, id)) {
   const url = request.nextUrl.clone();
   url.pathname = '/'; // Kick them to the home page
   return NextResponse.redirect(url);

@@ -12,7 +12,7 @@ import {
 export type Employee = {
     id: string,
     first_name: string,
-    last_name: string,
+    last_name: string | null,
     email: string,
     role: 'unassigned' | 'administrator' | 'project_manager' | 'logistician' | 'foreman',
     is_active: boolean,
@@ -40,7 +40,7 @@ export const employeeColumns: ColumnDef<Employee>[] = [
         },
         cell: ({ table, row }) => {
             const role = (table.options.meta as any)?.role;  
-            if (role == 'administrator') return (
+            if (role == 'administrator' && row.original.role != 'administrator') return (
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                         <button className="h-8 w-8 p-0">
@@ -50,13 +50,8 @@ export const employeeColumns: ColumnDef<Employee>[] = [
                     <DropdownMenuContent align="end">
                         <DropdownMenuLabel>Actions</DropdownMenuLabel>
                         { role == 'administrator' && <DropdownMenuItem asChild>
-                            <Link href={ `contacts/${ row.original.id }` }>
+                            <Link href={ `user-pages/${ row.original.id }` }>
                                 Edit
-                            </Link>
-                        </DropdownMenuItem> }
-                        { role == 'administrator' && <DropdownMenuItem asChild>
-                            <Link href={ `contacts/${ row.original.id }` }>
-                                Assign Role
                             </Link>
                         </DropdownMenuItem> }
                     </DropdownMenuContent>

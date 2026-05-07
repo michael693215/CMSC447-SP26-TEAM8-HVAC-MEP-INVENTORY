@@ -2,6 +2,7 @@
 
 import {useState, useActionState, useEffect } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { FaEye, FaEyeSlash } from 'react-icons/fa'
 import { IconType } from 'react-icons'
 
@@ -28,6 +29,7 @@ const EMPTY_FORM : addUserForm =
 
 export default function AddUser()
 {
+    const router = useRouter();
     const [form, setForm] = useState<addUserForm>(EMPTY_FORM);
     const [state, formAction] = useActionState(createUser, null);
     const [showPassword, setShowPassword] = useState(false);
@@ -60,9 +62,9 @@ export default function AddUser()
     return (
         <div className="min-h-screen p-8 text-black">
             <div className="max-w-2xl mx-auto">
-                <Link href="/" className="text-blue-600 hover:underline mb-4 inline-block font-medium">
-                    ← Back to Main Menu
-                </Link>
+                <button className="text-blue-600 hover:underline mb-4 inline-block font-medium" onClick={ router.back }>
+                    ← Back
+                </button>
                 <div className="mb-6">
                     <h1 className="text-3xl font-bold uppercase tracking-tight">Add User</h1>
                     <p className="text-gray-500 mt-1 text-sm">Fill out the form below to add a new user.</p>
@@ -159,7 +161,7 @@ export default function AddUser()
                         { state && (state.status.success ? <div className="bg-green-100">User added successfully</div> : <div className="bg-red-100">{ state.status.error }</div>) }
                         {/* Actions */}
                         <div className="flex gap-3 pt-2">
-                        <button type="submit" className="btn-primary flex-1">
+                        <button type="submit" className="btn-accent flex-1">
                             Add User
                         </button>
                         <button
