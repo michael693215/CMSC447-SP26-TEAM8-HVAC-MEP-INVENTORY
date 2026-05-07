@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { SortableHead, type SortDir } from "@/components/ui/table";
+import { getLocations } from "../materials-requests/actions"; // Import your existing location fetcher!
 
 type SortKey = "po" | "date" | "items" | "location" | "status";
 
@@ -18,7 +19,8 @@ interface PORow {
   PO_number: string;
   date: string | null;
   status: string | null;
-  location: string | null;
+  location_id: string | null; // Database column
+  locationName?: string;      // Formatted name for the UI
   po_materials: { line_number: number }[];
 }
 
@@ -69,11 +71,26 @@ export default function PurchaseOrdersPage() {
 
   useEffect(() => {
     (async () => {
-      const { data, error } = await supabase
-        .from("purchase_order")
-        .select("PO_number, date, status, location, po_materials(line_number)");
-      if (error) setError(error.message);
-      else setAllPOs((data as unknown as PORow[]) ?? []);
+      // Fetch POs and Locations at the same time for speed
+      const [poRes, locs] = await Promise.all([
+        supabase.from("purchase_order").select("PO_number, date, status, location_id, po_materials(line_number)"),
+        getLocations()
+      ]);
+
+      if (poRes.error) {
+        setError(poRes.error.message);
+      } else {
+        // Create a quick lookup dictionary for locations { "uuid": "Formatted Name" }
+        const locMap = new Map(locs.map(l => [l.id, l.name]));
+        
+        // Merge the formatted location name into the PO data
+        const mappedPOs = (poRes.data as any[]).map(po => ({
+          ...po,
+          locationName: po.location_id ? (locMap.get(po.location_id) || "Unknown Location") : "—"
+        }));
+        
+        setAllPOs(mappedPOs);
+      }
       setLoading(false);
     })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -96,7 +113,7 @@ export default function PurchaseOrdersPage() {
     const q = searchTerm.toLowerCase();
     const matchSearch =
       po.PO_number.toLowerCase().includes(q) ||
-      (po.location ?? "").toLowerCase().includes(q);
+      (po.locationName ?? "").toLowerCase().includes(q); // Filter searches against the pretty name!
     const matchStatus = statusFilter === "All" || po.status === statusFilter;
     return matchSearch && matchStatus;
   });
@@ -107,7 +124,7 @@ export default function PurchaseOrdersPage() {
     else if (sort.key === "status") cmp = (STATUS_ORDER[a.status ?? ""] ?? 0) - (STATUS_ORDER[b.status ?? ""] ?? 0);
     else if (sort.key === "po") cmp = a.PO_number.localeCompare(b.PO_number);
     else if (sort.key === "date") cmp = (a.date ?? "").localeCompare(b.date ?? "");
-    else if (sort.key === "location") cmp = (a.location ?? "").localeCompare(b.location ?? "");
+    else if (sort.key === "location") cmp = (a.locationName ?? "").localeCompare(b.locationName ?? ""); // Sorts alphabetically by pretty name
     return sort.dir === "asc" ? cmp : -cmp;
   });
 
@@ -223,7 +240,7 @@ export default function PurchaseOrdersPage() {
                         {po.po_materials.length} {po.po_materials.length === 1 ? "material" : "materials"}
                       </Link>
                     </td>
-                    <td className="p-3 sm:p-4 text-sm text-gray-700">{po.location ?? "—"}</td>
+                    <td className="p-3 sm:p-4 text-sm text-gray-700">{po.locationName}</td>
                     <td className="p-3 sm:p-4">
                       <div className="flex items-center justify-between gap-2">
                         <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase whitespace-nowrap ${STATUS_STYLES[po.status ?? ""] ?? "bg-gray-100 text-gray-600"}`}>

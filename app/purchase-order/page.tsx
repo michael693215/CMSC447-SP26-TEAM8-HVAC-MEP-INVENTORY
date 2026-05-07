@@ -2,9 +2,12 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import Link from "next/link";
-import { addPurchaseOrder, generatePOId, formatDeliveryDate, getAllLocations, addLocation } from "../lib/store";
-import type { Location } from "../lib/data";
+// Removed getAllLocations and addLocation since we are using Supabase now
+import { addPurchaseOrder, generatePOId, formatDeliveryDate } from "../lib/store";
 import { createClient } from "@/lib/supabase/client";
+// Import your Supabase location fetcher
+import { getLocations } from "../materials-requests/actions";
+import { submitPurchaseOrder } from "./actions"; 
 
 interface LineItem {
   productName: string;
@@ -17,19 +20,15 @@ interface POForm {
   poNumber: string;
   date: string;
   location: string;
-  newLocation: string;
 }
 
 const EMPTY_FORM: POForm = {
   poNumber: "",
   date: "",
   location: "",
-  newLocation: "",
 };
 
 const EMPTY_ITEM: LineItem = { productName: "", qty: "", specs: "", showSpecs: false };
-
-const ADD_NEW_VALUE = "__new__";
 
 const SKIP_WORDS = new Set([
   "total", "subtotal", "tax", "shipping", "discount", "page",
@@ -192,7 +191,6 @@ function extractSpecs(text: string, productName: string): string {
       if (specParts.length > 0) break;
       continue;
     }
-    // Stop at a new product line (qty at start or right-aligned)
     if (/^[ \t]*\d{1,4}[ \t]{2,}[A-Z]/.test(lines[i])) break;
     if (/^.{5,80}\s{2,}\d{1,4}\s*$/.test(line)) break;
 
@@ -256,7 +254,7 @@ function SuccessCheckIcon() {
 export default function PurchaseOrderPage() {
   const [form, setForm] = useState<POForm>(EMPTY_FORM);
   const [items, setItems] = useState<LineItem[]>([{ ...EMPTY_ITEM }]);
-  const [locations, setLocations] = useState<Location[]>([]);
+  const [locations, setLocations] = useState<any[]>([]); // Swapped to generic array for Supabase data
   const [submitted, setSubmitted] = useState(false);
   const [submittedPOId, setSubmittedPOId] = useState("");
   const [submittedLocation, setSubmittedLocation] = useState("");
@@ -272,13 +270,25 @@ export default function PurchaseOrderPage() {
   const [showDuplicate, setShowDuplicate] = useState(false);
   const [duplicatePO, setDuplicatePO] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  
   const fileInputRef = useRef<HTMLInputElement>(null);
   const supabase = createClient();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const renderTaskRef = useRef<any>(null);
 
+  // NEW: Fetch Supabase locations and set today's date on mount
   useEffect(() => {
-    setLocations(getAllLocations());
+    // 1. Set default date
+    const today = new Date();
+    const localDate = new Date(today.getTime() - (today.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+    setForm(prev => ({ ...prev, date: localDate }));
+
+    // 2. Fetch Supabase locations
+    async function loadLocs() {
+      const locs = await getLocations();
+      setLocations(locs);
+    }
+    loadLocs();
   }, []);
 
   useEffect(() => {
@@ -329,16 +339,11 @@ export default function PurchaseOrderPage() {
     setItems((prev) => prev.filter((_, i) => i !== idx));
   }
 
-  function resolvedLocation(): string {
-    if (form.location === ADD_NEW_VALUE) return form.newLocation.trim();
-    return form.location;
-  }
-
   async function handleSubmit(e: React.SyntheticEvent) {
     e.preventDefault();
     const validItems = items.filter((it) => it.productName.trim() && it.qty.trim());
     if (validItems.length === 0) return;
-    if (form.location === ADD_NEW_VALUE && !form.newLocation.trim()) return;
+    if (!form.location) return; // Strict Supabase location check
 
     const poId = form.poNumber.trim() || generatePOId();
     const { data: existing } = await supabase
@@ -356,70 +361,51 @@ export default function PurchaseOrderPage() {
     setShowConfirm(true);
   }
 
-  async function confirmSubmit() {
+async function confirmSubmit() {
     if (submitting) return;
     setSubmitting(true);
 
     const validItems = items.filter((it) => it.productName.trim() && it.qty.trim());
     const poId = form.poNumber.trim() || generatePOId();
-    const locationName = resolvedLocation();
     const isoDate = form.date || new Date().toISOString().split("T")[0];
 
-    // Insert into Supabase
-    const { error: poError } = await supabase
-      .from("purchase_order")
-      .insert([{ PO_number: poId, date: isoDate, status: "Pending", location: locationName }]);
+    // 1. Call the new Server Action to securely update the database
+    const result = await submitPurchaseOrder({
+      poNumber: poId,
+      date: isoDate,
+      locationId: form.location, // Safely passing the UUID from the dropdown
+      items: validItems.map((it) => ({
+        productName: it.productName.trim(),
+        qty: parseInt(it.qty, 10),
+        specs: it.specs.trim()
+      }))
+    });
 
-    if (poError) {
-      alert("Failed to save purchase order: " + poError.message);
+    // 2. Handle Errors
+    if (!result.success) {
+      alert("Error: " + result.error);
       setSubmitting(false);
       return;
     }
 
-    if (validItems.length > 0) {
-      await supabase.from("po_materials").insert(
-        validItems.map((it, idx) => ({
-          PO_number: poId,
-          line_number: idx + 1,
-          quantity: parseInt(it.qty, 10),
-          product_name: it.productName.trim(),
-        }))
-      );
-    }
+    // 3. Find the pretty name of the location for the Success Screen
+    const selectedLocationObj = locations.find((loc) => loc.id === form.location);
+    const prettyLocationName = selectedLocationObj ? selectedLocationObj.name : "Unknown Location";
 
-    // Keep local storage in sync
-    if (form.location === ADD_NEW_VALUE && locationName) {
-      const newLoc = addLocation(locationName);
-      setLocations((prev) => [...prev, newLoc]);
-    }
-
-    const dateDisplay = form.date
-      ? formatDeliveryDate(form.date)
-      : new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-
-    addPurchaseOrder({
-      id: poId,
-      date: dateDisplay,
-      location: locationName,
-      items: validItems.map((it) => ({
-        productId: 0,
-        productName: it.productName.trim(),
-        qty: parseInt(it.qty, 10),
-        specs: it.specs.trim() || undefined,
-      })),
-      status: "Pending",
-      notes: "",
-    });
-
+    // 4. Update UI state to show the Success Screen
     setSubmittedPOId(poId);
-    setSubmittedLocation(locationName);
+    setSubmittedLocation(prettyLocationName);
     setShowConfirm(false);
     setSubmitted(true);
     setSubmitting(false);
   }
 
   function handleReset() {
-    setForm(EMPTY_FORM);
+    // Reset back to today's date so it isn't blank
+    const today = new Date();
+    const localDate = new Date(today.getTime() - (today.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+    setForm({ ...EMPTY_FORM, date: localDate });
+    
     setItems([{ ...EMPTY_ITEM }]);
     setSubmitted(false);
     setSubmittedPOId("");
@@ -703,7 +689,7 @@ export default function PurchaseOrderPage() {
               </div>
             </div>
 
-            {/* Location */}
+            {/* UPDATED: Location Supabase Dropdown */}
             <div className="flex flex-col gap-1">
               <label className="text-xs font-bold uppercase tracking-wider text-gray-600">
                 Location <span className="text-red-500">*</span>
@@ -712,26 +698,15 @@ export default function PurchaseOrderPage() {
                 name="location"
                 value={form.location}
                 onChange={handleFormChange}
-                className="input-themed p-2 text-black w-full"
+                className="input-themed p-2 text-black w-full bg-white"
                 required
               >
                 <option value="" disabled>Select a location…</option>
-                <option value={ADD_NEW_VALUE}>+ Add new location</option>
+                {/* Dynamically mapped from Supabase */}
                 {locations.map((loc) => (
-                  <option key={loc.id} value={loc.name}>{loc.name}</option>
+                  <option key={loc.id} value={loc.id}>{loc.name}</option>
                 ))}
               </select>
-              {form.location === ADD_NEW_VALUE && (
-                <input
-                  name="newLocation"
-                  value={form.newLocation}
-                  onChange={handleFormChange}
-                  placeholder="Enter new location name"
-                  className="input-themed p-2 text-black w-full mt-1"
-                  required
-                  autoFocus
-                />
-              )}
             </div>
 
             {/* Line Items */}
@@ -866,7 +841,7 @@ export default function PurchaseOrderPage() {
             </div>
             <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
               <span className="font-bold text-gray-600 sm:w-36 sm:shrink-0">Location</span>
-              <span>{resolvedLocation() || "—"}</span>
+              <span>{form.location || "—"}</span>
             </div>
             <div>
               <span className="font-bold text-gray-600 block mb-1">Products</span>
