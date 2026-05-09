@@ -1,21 +1,22 @@
 import React from "react";
 import Link from "next/link";
 import { getMaterialRequests } from "./actions";
+import { getUserRole } from "@/lib/actions"; // Assuming this is where your role function lives
 
-const STATUS_STYLES: Record<string, string> = {
-  "completed": "bg-green-100 text-green-700",
-  "In Transit": "bg-blue-100 text-blue-700",
-  "Pending": "bg-yellow-100 text-yellow-700",
-};
+// Import your Builder and Blueprint!
+import { DataTable } from "@/components/ui/DataTable";
+import { materialsRequestColumns } from "@/components/columns/MaterialsRequest";
 
 export default async function MaterialsRequestsList() {
+  // 1. Fetch the data and the user role directly on the server
   const requests = await getMaterialRequests();
+  const role = await getUserRole();
 
   return (
     <div className="min-h-screen p-4 sm:p-8 text-black bg-gray-50">
       <div className="max-w-5xl mx-auto">
         <Link href="/" className="text-blue-600 hover:underline mb-6 inline-block font-medium">
-          ← Back to Main Menu
+          &larr; Back to Main Menu
         </Link>
 
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
@@ -31,54 +32,15 @@ export default async function MaterialsRequestsList() {
           </Link>
         </div>
 
-        {/* Added a dedicated overflow wrapper inside the rounded border container */}
-        <div className="bg-white shadow-sm rounded-xl border border-gray-200 overflow-hidden">
-          <div className="overflow-x-auto">
-            {/* Added min-w-[800px] to force the scroll on mobile instead of squishing */}
-            <table className="w-full text-left border-collapse min-w-[800px]">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Request ID</th>
-                  <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Date</th>
-                  <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-center">Items</th>
-                  <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Status</th>
-                  <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {requests.map((req: any) => (
-                  <tr key={req.id} className="border-b border-gray-100 hover:bg-blue-50 transition">
-                    <td className="p-4 font-mono font-bold text-gray-900">{req.id.slice(0, 8)}</td>
-                    <td className="p-4 text-gray-600 whitespace-nowrap">{req.date}</td>
-                    
-                    <td className="p-4 text-center font-mono font-bold text-gray-700">
-                      {req.line_items?.length || 0}
-                    </td>
-                    
-                    <td className="p-4">
-                      <span className={`px-3 py-1 rounded-md text-xs font-bold uppercase whitespace-nowrap ${STATUS_STYLES[req.status] || "bg-gray-100 text-gray-600"}`}>
-                        {req.status}
-                      </span>
-                    </td>
-                    <td className="p-4 text-right whitespace-nowrap">
-                      <Link 
-                        href={`/materials-requests/${req.id}`} 
-                        className="text-blue-600 font-semibold hover:underline text-sm"
-                      >
-                        View Details
-                      </Link>
-                    </td>
-                  </tr>
-                ))} 
-                {requests.length === 0 && (
-                  <tr>
-                    <td colSpan={5} className="p-8 text-center text-gray-500 italic">No material requests found.</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+        {/* 2. Feed the data and the columns to the DataTable */}
+        <div className="bg-white shadow-md rounded-xl overflow-hidden border border-gray-200">
+            <DataTable 
+                columns={materialsRequestColumns} 
+                data={requests} 
+                role={role} 
+            />
         </div>
+
       </div>
     </div>
   );
