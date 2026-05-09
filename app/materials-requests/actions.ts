@@ -6,23 +6,30 @@ import { revalidatePath } from "next/cache";
 export async function getMaterialRequests() {
   const supabase = await createClient();
 
-  // FIXED: Removed the fake 'request_id' column from the select query.
-  // FIXED: Changed the line item count to look for 'line_number' based on your screenshot!
+  // Fetches from line items and joins the parent request to get the status
   const { data, error } = await supabase
-    .from("materials_request")
+    .from("materials_request_line_item")
     .select(`
-      id,
-      date,
-      status,
-      line_items:materials_request_line_item ( line_number )
-    `)
-    .order("date", { ascending: false });
+      request_id,
+      from_id,
+      to_id,
+      materials_request!inner (
+        status
+      )
+    `);
 
   if (error) {
     console.log("Error fetching requests:", error.message);
     return [];
   }
-  return data;
+
+  // Flattens the nested database response to match your UI columns perfectly
+  return data.map((item: any) => ({
+    request_id: item.request_id,
+    from_id: item.from_id,
+    to_id: item.to_id,
+    status: item.materials_request.status 
+  }));
 }
 
 export async function getLocations() {
@@ -86,13 +93,13 @@ export async function getMaterialRequestById(id: string) {
   if (reqError || !request) return null;
 
   // 2. Get the connected line items
-  // NOTE: Ensure 'request_id' is the column name in materials_request_line_item 
-  // that points back to the materials_request table!
+  // FIXED: Updated 'quantity' to 'original_qty' and 'current_qty' to match your DB schema
   const { data: lineItems, error: linesError } = await supabase
     .from("materials_request_line_item")
     .select(`
       line_number,
-      quantity,
+      original_qty,
+      current_qty,
       from_id,
       to_id,
       SKU,
@@ -114,7 +121,7 @@ export async function getMaterialRequestById(id: string) {
   // 4. Format everything for the UI
   const formattedItems = (lineItems || []).map((item: any) => ({
     line_number: item.line_number,
-    quantity: item.quantity,
+    quantity: item.original_qty, // Or item.current_qty depending on what you want to show
     sku: item.SKU,
     description: item.materials?.description || "Unknown Material",
     from_name: locationMap.get(item.from_id) || "Unknown Source",
@@ -131,12 +138,11 @@ export async function createMaterialRequest(formData: any) {
   const supabase = await createClient();
 
   // 1. Insert the "Header" (The main request entry)
-  // We let Supabase generate the UUID 'id' automatically
   const { data: requestData, error: requestError } = await supabase
     .from("materials_request")
     .insert([{ 
       date: formData.date, 
-      status: "pending" // Matching your lowercase database Enum
+      status: "pending" 
     }])
     .select("id")
     .single();
@@ -147,12 +153,13 @@ export async function createMaterialRequest(formData: any) {
   }
 
   // 2. Prepare the Line Items
-  // We use the 'id' we just got from the insert above to link these items
+  // FIXED: Changed 'quantity' to 'original_qty' and 'current_qty' to match your DB
   const lineItems = formData.items.map((item: any, index: number) => ({
     request_id: requestData.id, 
     line_number: index + 1,
     SKU: item.sku,
-    quantity: item.requestQty,
+    original_qty: item.requestQty,
+    current_qty: item.requestQty, // Initializes current_qty to the original requested amount
     from_id: formData.fromLocation, 
     to_id: formData.toLocation,
   }));
