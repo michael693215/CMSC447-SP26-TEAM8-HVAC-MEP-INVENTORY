@@ -6,9 +6,9 @@ import { revalidatePath } from "next/cache";
 export async function getMaterialRequests() {
   const supabase = await createClient();
 
-  // Fetches from line items and joins the parent request to get the status
+  // 1. Fetch the raw requests
   const { data, error } = await supabase
-    .from("materials_request_line_item")
+    .from("materials_request_materials")
     .select(`
       request_id,
       from_id,
@@ -23,11 +23,15 @@ export async function getMaterialRequests() {
     return [];
   }
 
-  // Flattens the nested database response to match your UI columns perfectly
+  // 2. Fetch Locations to map IDs to our newly fixed Names!
+  const locations = await getLocations();
+  const locationMap = new Map(locations.map(loc => [loc.id, loc.name]));
+
+  // 3. Format the response to include the actual names instead of IDs
   return data.map((item: any) => ({
     request_id: item.request_id,
-    from_id: item.from_id,
-    to_id: item.to_id,
+    from_name: locationMap.get(item.from_id) || "Unknown Location", 
+    to_name: locationMap.get(item.to_id) || "Unknown Location",     
     status: item.materials_request.status 
   }));
 }
@@ -35,16 +39,10 @@ export async function getMaterialRequests() {
 export async function getLocations() {
   const supabase = await createClient();
 
+  // Just grab the ID and your new Name column!
   const { data, error } = await supabase
     .from("location")
-    .select(`
-      id,
-      address:location_address (
-        street_number,
-        street_name,
-        city
-      )
-    `);
+    .select("id, name");
 
   if (error) {
     console.log("Error fetching locations:", error.message);
@@ -53,9 +51,7 @@ export async function getLocations() {
 
   return data.map((loc: any) => ({
     id: loc.id,
-    name: loc.address 
-      ? `${loc.address.street_number} ${loc.address.street_name} (${loc.address.city})`
-      : "Unnamed Location"
+    name: loc.name || "Unnamed Location" 
   }));
 }
 
@@ -83,53 +79,89 @@ export async function getInventoryByLocation(locationId: string) {
 export async function getMaterialRequestById(id: string) {
   const supabase = await createClient();
 
-  // 1. Get the main header
+  // 1. Get the main header AND join the employee table!
   const { data: request, error: reqError } = await supabase
     .from("materials_request")
-    .select("*")
+    .select(`
+      *,
+      employee (
+        first_name,
+        last_name
+      )
+    `)
     .eq("id", id)
     .single();
 
   if (reqError || !request) return null;
 
+  // Safely extract and format the employee's full name
+  const employeeData = Array.isArray(request.employee) ? request.employee[0] : request.employee;
+  const employeeName = employeeData?.first_name 
+    ? `${employeeData.first_name} ${employeeData.last_name}`.trim()
+    : "Unknown Employee";
+
   // 2. Get the connected line items
-  // FIXED: Updated 'quantity' to 'original_qty' and 'current_qty' to match your DB schema
   const { data: lineItems, error: linesError } = await supabase
-    .from("materials_request_line_item")
+    .from("materials_request_materials")
     .select(`
-      line_number,
-      original_qty,
-      current_qty,
+      id,
+      total,
+      remaining,
       from_id,
       to_id,
-      SKU,
-      materials (
-        description
-      )
+      sku
     `)
-    .eq("request_id", id)
-    .order("line_number", { ascending: true });
+    .eq("request_id", id);
 
   if (linesError) {
     console.error("Error fetching line items:", linesError.message);
   }
 
-  // 3. Get Locations to map IDs to Names
+  // 3. FOOLPROOF FETCH for Materials
+  const skus = Array.from(new Set(
+    lineItems?.map(item => item.sku?.trim()).filter(Boolean) || []
+  ));
+  
+  const materialsMap = new Map();
+
+  if (skus.length > 0) {
+    const { data: materialsData, error: matError } = await supabase
+      .from("materials")
+      .select("sku, name, description")
+      .in("sku", skus);
+
+    if (matError) {
+      console.error("Error fetching materials:", matError.message);
+    } else if (materialsData) {
+      materialsData.forEach(mat => materialsMap.set(mat.sku.trim(), mat));
+    }
+  }
+
+  // 4. Get Locations
   const locations = await getLocations();
   const locationMap = new Map(locations.map(loc => [loc.id, loc.name]));
 
-  // 4. Format everything for the UI
-  const formattedItems = (lineItems || []).map((item: any) => ({
-    line_number: item.line_number,
-    quantity: item.original_qty, // Or item.current_qty depending on what you want to show
-    sku: item.SKU,
-    description: item.materials?.description || "Unknown Material",
-    from_name: locationMap.get(item.from_id) || "Unknown Source",
-    to_name: locationMap.get(item.to_id) || "Unknown Destination"
-  }));
+  // 5. Format everything for the UI
+  const formattedItems = (lineItems || []).map((item: any, index: number) => {
+    
+    // Trim the lookup key too so it matches perfectly!
+    const material = materialsMap.get(item.sku?.trim()) || {};
+
+    return {
+      line_number: index + 1, 
+      quantity: item.total, 
+      remaining: item.remaining, 
+      sku: item.sku,
+      name: material.name || "Unknown Material",
+      description: material.description || "No description",
+      from_name: locationMap.get(item.from_id) || "Unknown Source",
+      to_name: locationMap.get(item.to_id) || "Unknown Destination"
+    };
+  });
 
   return {
     ...request,
+    employee_name: employeeName, // <-- We append the formatted name here!
     items: formattedItems
   };
 }
@@ -153,20 +185,18 @@ export async function createMaterialRequest(formData: any) {
   }
 
   // 2. Prepare the Line Items
-  // FIXED: Changed 'quantity' to 'original_qty' and 'current_qty' to match your DB
-  const lineItems = formData.items.map((item: any, index: number) => ({
+  const lineItems = formData.items.map((item: any) => ({
     request_id: requestData.id, 
-    line_number: index + 1,
-    SKU: item.sku,
-    original_qty: item.requestQty,
-    current_qty: item.requestQty, // Initializes current_qty to the original requested amount
+    sku: item.sku,
+    total: item.requestQty,
+    remaining: item.requestQty, // Initializes remaining to the original requested amount
     from_id: formData.fromLocation, 
     to_id: formData.toLocation,
   }));
 
   // 3. Insert all line items at once
   const { error: lineItemsError } = await supabase
-    .from("materials_request_line_item")
+    .from("materials_request_materials")
     .insert(lineItems);
 
   if (lineItemsError) {
