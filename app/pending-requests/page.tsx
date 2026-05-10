@@ -39,7 +39,11 @@ export default function PendingRequests() {
       // 4. Filter and format the requests for the DataTable
       const formatted: PendingRequestItem[] = rawData
         .filter((req: any) => {
-          return req.line_items?.some((item: any) => item.to_id === savedLocationId);
+          // Only keep requests that have items for this location that still need to be received
+          return req.line_items?.some((item: any) => {
+             const remaining = (item.remaining !== undefined && item.remaining !== null) ? item.remaining : item.quantity;
+             return item.to_id === savedLocationId && remaining > 0;
+          });
         })
         .map((req: any) => ({
           id: req.id,
@@ -47,12 +51,20 @@ export default function PendingRequests() {
           rawRequest: req, // Saving this for handleSelectRequest
           items: req.line_items
             .filter((item: any) => item.to_id === savedLocationId)
-            .map((item: any) => ({
-              id: item.line_number.toString(), 
-              line_number: item.line_number,
-              name: item.name,
-              quantity: item.quantity
-            }))
+            .map((item: any) => {
+              // Explicitly prioritize the remaining amount!
+              const displayQty = (item.remaining !== undefined && item.remaining !== null) 
+                ? item.remaining 
+                : item.quantity;
+
+              return {
+                id: item.line_number?.toString() || Math.random().toString(), 
+                line_number: item.line_number,
+                name: item.name,
+                quantity: displayQty
+              };
+            })
+            .filter((item: any) => item.quantity > 0) // Hide fully received line items
         }));
 
       setLocationRequests(formatted);

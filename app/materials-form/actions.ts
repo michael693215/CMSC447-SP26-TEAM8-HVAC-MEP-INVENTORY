@@ -5,94 +5,140 @@ import { revalidatePath } from "next/cache";
 
 interface FulfillmentPayload {
   dbId: string;
+  date: string; // Captured from the new date input
   items: { 
-    id: string; // This is actually the line_number from the frontend
+    sku: string; 
     name: string; 
     quantity: number; 
     specifications: string;
   }[];
 }
 
-export async function logMaterialFulfillment({ dbId, items }: FulfillmentPayload) {
+export async function logMaterialFulfillment({ dbId, date, items }: FulfillmentPayload) {
   try {
     const supabase = await createClient(); 
 
-    // 1. Fetch the line items. We added 'line_number' to this select statement!
+    // Step 0: Get the logged-in user to attach as the logistician
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      throw new Error("You must be logged in to fulfill a request.");
+    }
+
+    // Step 1: Add a new row to the fulfillment table
+    const { data: fulfillmentData, error: fulfillmentError } = await supabase
+      .from('fulfillment')
+      .insert({
+        datetime: new Date(date).toISOString(),
+        logistician_id: user.id,
+        request_id: dbId
+      })
+      .select('id')
+      .single();
+
+    if (fulfillmentError || !fulfillmentData) {
+      throw new Error(`Failed to create fulfillment record: ${fulfillmentError?.message}`);
+    }
+
+    // Fetch the line items from materials_request_materials
+    // We select the 'id' column so we can link it in fulfillment_materials
     const { data: lineItems, error: lineError } = await supabase
-      .from('materials_request_line_item')
-      .select('line_number, SKU, from_id, to_id')
+      .from('materials_request_materials')
+      .select('id, sku, from_id, to_id, remaining')
       .eq('request_id', dbId);
 
     if (lineError || !lineItems) {
       throw new Error("Could not locate the line items for this request.");
     }
 
-    // 2. Loop through the items submitted from the form to update inventory
+    // Loop through the items submitted from the form
     for (const formItem of items) {
-      
-      // Match the form item using line_number instead of SKU
-      const lineItemInfo = lineItems.find(li => li.line_number.toString() === formItem.id);
-      
-      if (!lineItemInfo) continue; // Skip if we can't find a matching line item
+      const lineItemInfo = lineItems.find(li => li.sku === formItem.sku);
+      if (!lineItemInfo) continue;
 
-      const { from_id, to_id, SKU } = lineItemInfo;
+      const { id: materials_request_materials_id, from_id, to_id, sku, remaining } = lineItemInfo;
       const receivedQty = formItem.quantity;
 
-      // A. DEDUCT from Source Location (from_id)
+      // Step 2: Add row to fulfillment_materials linking to the exact request line item
+      const { error: fmatError } = await supabase
+        .from('fulfillment_materials')
+        .insert({
+          fulfillment_id: fulfillmentData.id,
+          quantity: receivedQty,
+          materials_request_materials_id: materials_request_materials_id
+        });
+
+      if (fmatError) {
+        console.error("Error inserting fulfillment materials:", fmatError.message);
+      }
+
+      // Step 3: Update the location_materials table
+      // A. DEDUCT from Source Location
       const { data: sourceInv } = await supabase
-        .from('location_inventory')
+        .from('location_materials')
         .select('id, quantity')
         .eq('location_id', from_id)
-        .eq('SKU', SKU)
+        .eq('sku', sku)
         .single();
 
       if (sourceInv) {
         await supabase
-          .from('location_inventory')
+          .from('location_materials')
           .update({ quantity: sourceInv.quantity - receivedQty })
           .eq('id', sourceInv.id);
       }
 
-      // B. ADD to Destination Location (to_id)
+      // B. ADD to Destination Location
       const { data: destInv } = await supabase
-        .from('location_inventory')
+        .from('location_materials')
         .select('id, quantity')
         .eq('location_id', to_id)
-        .eq('SKU', SKU)
-        .single();
+        .eq('sku', sku)
+        .maybeSingle();
 
       if (destInv) {
-        // If the SKU already exists at the destination, add to it
         await supabase
-          .from('location_inventory')
+          .from('location_materials')
           .update({ quantity: destInv.quantity + receivedQty })
           .eq('id', destInv.id);
       } else {
-        // If it's the first time this SKU is at this location, insert a new row
         await supabase
-          .from('location_inventory')
+          .from('location_materials')
           .insert({
             location_id: to_id,
-            SKU: SKU,
+            sku: sku,
             quantity: receivedQty
           });
       }
+
+      // Step 4: Decrement the remaining column in materials_request_materials
+      const newRemaining = remaining - receivedQty;
+      await supabase
+        .from('materials_request_materials')
+        .update({ remaining: newRemaining })
+        .eq('id', materials_request_materials_id);
+
+      // Update our local array tracking so we can evaluate Step 5 correctly
+      lineItemInfo.remaining = newRemaining;
     }
 
-    // 3. Update the overall request status to 'completed'
-    const { error: updateError } = await supabase
-      .from('materials_request')
-      .update({ status: 'completed' }) // Changed to 'completed' per your request
-      .eq('id', dbId);
+    // Step 5: Check if the entire request is completed
+    // If every single item attached to this request now has a remaining value of 0 (or less)
+    const isFullyCompleted = lineItems.every(li => li.remaining <= 0);
 
-    if (updateError) {
-      throw new Error("Inventory moved, but failed to update the request status.");
+    if (isFullyCompleted) {
+      const { error: updateError } = await supabase
+        .from('materials_request')
+        .update({ status: 'completed' }) 
+        .eq('id', dbId);
+
+      if (updateError) {
+        throw new Error("Inventory moved, but failed to close out the request status.");
+      }
     }
 
-    // 4. Clear the Next.js cache so your tables reflect the changes instantly
+    // Clear Next.js cache so tables update instantly
     revalidatePath('/pending-requests');
     revalidatePath('/materials-requests');
-    revalidatePath('/inventory'); 
 
     return { success: true };
 

@@ -45,13 +45,15 @@ export async function getPendingMaterialRequests() {
     }
   }
 
-  // Format with material names and the 'remaining' quantity
+  // Format with material names and explicitly pass 'remaining'
   return data?.map(req => ({
     ...req,
     line_items: req.line_items.map((item: any, idx: number) => ({
       line_number: idx + 1,
       to_id: item.to_id,
-      quantity: item.remaining ?? item.total, // Automatically uses remaining!
+      quantity: item.remaining ?? item.total,
+      remaining: item.remaining, 
+      total: item.total,
       name: materialsMap.get(item.sku?.trim())?.name || "Unknown Material",
       sku: item.sku
     }))
