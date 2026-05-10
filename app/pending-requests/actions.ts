@@ -3,7 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 
-// 1. Existing function to get the list
+// 1. Existing function to get the list (UPDATED TO NEW SCHEMA)
 export async function getPendingMaterialRequests() {
   const supabase = await createClient();
 
@@ -13,11 +13,11 @@ export async function getPendingMaterialRequests() {
       id,
       date,
       status,
-      line_items:materials_request_line_item (
-        quantity,
+      line_items:materials_request_materials (
+        total,
+        remaining,
         to_id,
-        line_number,
-        materials ( description )
+        sku
       )
     `)
     .eq("status", "pending") 
@@ -27,11 +27,38 @@ export async function getPendingMaterialRequests() {
     console.log("Error fetching pending requests:", error.message);
     return [];
   }
+
+  // FOOLPROOF FETCH for Material Names
+  const skus = Array.from(new Set(
+    data?.flatMap(req => req.line_items.map((item: any) => item.sku?.trim())).filter(Boolean) || []
+  ));
   
-  return data;
+  const materialsMap = new Map();
+  if (skus.length > 0) {
+    const { data: materialsData } = await supabase
+      .from("materials")
+      .select("sku, name")
+      .in("sku", skus);
+      
+    if (materialsData) {
+      materialsData.forEach(mat => materialsMap.set(mat.sku.trim(), mat));
+    }
+  }
+
+  // Format with material names and the 'remaining' quantity
+  return data?.map(req => ({
+    ...req,
+    line_items: req.line_items.map((item: any, idx: number) => ({
+      line_number: idx + 1,
+      to_id: item.to_id,
+      quantity: item.remaining ?? item.total, // Automatically uses remaining!
+      name: materialsMap.get(item.sku?.trim())?.name || "Unknown Material",
+      sku: item.sku
+    }))
+  })) || [];
 }
 
-// 2. NEW: The fulfillment action you want here
+// 2. The fulfillment action (Unchanged)
 export async function logMaterialFulfillment(formData: any) {
   const supabase = await createClient();
 

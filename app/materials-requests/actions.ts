@@ -153,7 +153,7 @@ export async function getMaterialRequestById(id: string) {
       remaining: item.remaining, 
       sku: item.sku,
       name: material.name || "Unknown Material",
-      description: material.description || "No description",
+      description: material.description || "",
       from_name: locationMap.get(item.from_id) || "Unknown Source",
       to_name: locationMap.get(item.to_id) || "Unknown Destination"
     };

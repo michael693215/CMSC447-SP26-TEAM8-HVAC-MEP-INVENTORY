@@ -1,13 +1,18 @@
 "use client";
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+
 import { getPendingMaterialRequests } from './actions';
 import { getLocations } from '../materials-requests/actions';
+
+// Import your Builder and Blueprint!
+import { DataTable } from "@/components/ui/DataTable";
+import { getPendingRequestColumns, PendingRequestItem } from "@/components/columns/PendingRequest";
 
 export default function PendingRequests() {
   const router = useRouter();
   const [addressName, setAddressName] = useState('Loading address...');
-  const [locationRequests, setLocationRequests] = useState<any[]>([]);
+  const [locationRequests, setLocationRequests] = useState<PendingRequestItem[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
 
@@ -17,39 +22,35 @@ export default function PendingRequests() {
       const savedLocationId = sessionStorage.getItem('deliveryLocation');
       
       if (!savedLocationId) {
-        // Fallback in case someone navigates here directly without picking a location
         router.push('/log-delivery');
         return;
       }
 
-      // 2. Fetch data in parallel for speed
+      // 2. Fetch data in parallel
       const [allLocations, rawData] = await Promise.all([
         getLocations(),
         getPendingMaterialRequests()
       ]);
 
       // 3. Find the pretty address for the header
-      const currentLoc = allLocations.find(l => l.id === savedLocationId);
+      const currentLoc = allLocations.find((l: any) => l.id === savedLocationId);
       setAddressName(currentLoc ? currentLoc.name : "Unknown Location");
 
-      // 4. Filter and format the requests
-      const formatted = rawData
+      // 4. Filter and format the requests for the DataTable
+      const formatted: PendingRequestItem[] = rawData
         .filter((req: any) => {
-          // Using to_id to determine the destination of the items
           return req.line_items?.some((item: any) => item.to_id === savedLocationId);
         })
         .map((req: any) => ({
           id: req.id,
-          // Slice the ID to 8 characters and keep it lowercase to match the other table perfectly
           displayId: req.id.slice(0, 8),
+          rawRequest: req, // Saving this for handleSelectRequest
           items: req.line_items
-            // Using to_id to determine the destination of the items
             .filter((item: any) => item.to_id === savedLocationId)
             .map((item: any) => ({
-              // FIX: We use line_number here because the line item table doesn't have an ID
               id: item.line_number.toString(), 
               line_number: item.line_number,
-              name: item.materials?.description || "Unknown Material",
+              name: item.name,
               quantity: item.quantity
             }))
         }));
@@ -61,8 +62,8 @@ export default function PendingRequests() {
     loadData();
   }, [router]);
 
-  const handleSelectRequest = (request: any) => {
-    sessionStorage.setItem('selectedRequestData', JSON.stringify(request));
+  const handleSelectRequest = (rawRequest: any) => {
+    sessionStorage.setItem('selectedRequestData', JSON.stringify(rawRequest));
     router.push('/materials-form'); 
   };
 
@@ -70,7 +71,7 @@ export default function PendingRequests() {
     if (!searchQuery) return true;
     const query = searchQuery.toLowerCase();
     if (request.displayId.toLowerCase().includes(query)) return true;
-    return request.items.some((item: any) => item.name.toLowerCase().includes(query));
+    return request.items.some(item => item.name.toLowerCase().includes(query));
   });
 
   return (
@@ -81,7 +82,7 @@ export default function PendingRequests() {
           onClick={() => router.push('/log-delivery')} 
           className="text-blue-600 hover:underline mb-6 inline-block font-medium"
         >
-          ← Back to Hub
+          &larr; Back to Hub
         </button>
 
         <header className="mb-8">
@@ -91,6 +92,7 @@ export default function PendingRequests() {
           </p>
         </header>
 
+        {/* Search Bar */}
         <div className="mb-6 relative">
           <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
             <svg className="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
@@ -106,68 +108,22 @@ export default function PendingRequests() {
           />
         </div>
 
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-gray-100 border-b border-gray-200 text-sm uppercase tracking-wider text-gray-600">
-                <th className="p-4 font-bold">Request ID</th>
-                <th className="p-4 font-bold">Items Expected</th>
-                <th className="p-4 font-bold text-right">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {isLoading ? (
-                <tr>
-                  <td colSpan={3} className="p-8 text-center text-gray-500 font-medium">
-                    Loading pending requests...
-                  </td>
-                </tr>
-              ) : (
-                <>
-                  {displayedRequests.map((request) => (
-                    <tr 
-                      key={request.id} 
-                      onClick={() => handleSelectRequest(request)}
-                      className="border-b border-gray-100 hover:bg-blue-50 cursor-pointer transition"
-                    >
-                      <td className="p-4 font-bold text-gray-900">{request.displayId}</td>
-                      <td className="p-4">
-                        <ul className="text-sm text-gray-600 list-disc list-inside">
-                          {request.items.map((item: any) => (
-                            <li key={`${request.id}-${item.line_number}`}>
-                              <span className="font-semibold text-gray-800">{item.quantity}x</span> {item.name}
-                            </li>
-                          ))}
-                        </ul>
-                      </td>
-                      <td className="p-4 text-right">
-                        <button className="bg-blue-100 text-blue-700 px-4 py-2 rounded-lg font-semibold hover:bg-blue-200 transition active:scale-95">
-                          Select →
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                  
-                  {!isLoading && locationRequests.length === 0 && (
-                    <tr>
-                      <td colSpan={3} className="p-8 text-center text-gray-500 italic">
-                        No pending requests found for this location.
-                      </td>
-                    </tr>
-                  )}
-
-                  {!isLoading && locationRequests.length > 0 && displayedRequests.length === 0 && (
-                    <tr>
-                      <td colSpan={3} className="p-8 text-center text-gray-500 italic">
-                        No results found for &quot;<span className="font-semibold">{searchQuery}</span>&quot;
-                      </td>
-                    </tr>
-                  )}
-                </>
-              )}
-            </tbody>
-          </table>
+        {/* Builder Table! */}
+        <div className="bg-white shadow-md rounded-xl overflow-hidden border border-gray-200">
+          {isLoading ? (
+            <div className="p-10 text-center text-gray-500 font-medium">Loading pending requests...</div>
+          ) : (
+            <DataTable 
+              columns={getPendingRequestColumns(handleSelectRequest)} 
+              data={displayedRequests} 
+              // Passing administrator as a default role so the actions render
+              role={"administrator" as any} 
+              // This gives us the row hover effect from the Builder
+              onRowClick={(row) => handleSelectRequest(row.rawRequest)}
+            />
+          )}
         </div>
+
       </div>
     </div>
   );

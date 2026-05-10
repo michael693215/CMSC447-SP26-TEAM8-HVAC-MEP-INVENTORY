@@ -110,7 +110,7 @@ export default async function RequestDetailsPage({
                     <td className="p-3 sm:p-4">
                       <div className="font-bold text-black">{item.name}</div>
                       <div className="text-xs text-gray-500 italic mt-0.5">
-                        {item.description} (SKU: {item.sku})
+                        {item.description} ({item.sku})
                       </div>
                     </td>
                     <td className="p-3 sm:p-4 text-center font-mono text-lg font-bold">{item.quantity}</td>
