@@ -43,7 +43,7 @@ export default function PendingRequests() {
         })
         .map((req: any) => ({
           id: req.id,
-          displayId: req.id.slice(0, 8),
+          displayId: req.id,
           rawRequest: req, // Saving this for handleSelectRequest
           items: req.line_items
             .filter((item: any) => item.to_id === savedLocationId)

@@ -6,34 +6,42 @@ import { revalidatePath } from "next/cache";
 export async function getMaterialRequests() {
   const supabase = await createClient();
 
-  // 1. Fetch the raw requests
+  // 1. Fetch the raw requests from the HEADER table, not the line items!
   const { data, error } = await supabase
-    .from("materials_request_materials")
+    .from("materials_request")
     .select(`
-      request_id,
-      from_id,
-      to_id,
-      materials_request!inner (
-        status
+      id,
+      status,
+      date,
+      items:materials_request_materials (
+        from_id,
+        to_id
       )
-    `);
+    `)
+    .order('date', { ascending: false }); // Puts the newest requests at the top
 
   if (error) {
     console.log("Error fetching requests:", error.message);
     return [];
   }
 
-  // 2. Fetch Locations to map IDs to our newly fixed Names!
+  // 2. Fetch Locations to map IDs to our newly fixed Names
   const locations = await getLocations();
   const locationMap = new Map(locations.map(loc => [loc.id, loc.name]));
 
   // 3. Format the response to include the actual names instead of IDs
-  return data.map((item: any) => ({
-    request_id: item.request_id,
-    from_name: locationMap.get(item.from_id) || "Unknown Location", 
-    to_name: locationMap.get(item.to_id) || "Unknown Location",     
-    status: item.materials_request.status 
-  }));
+  return data.map((req: any) => {
+    // Since all items in a single request share the same origin/destination, 
+    // we just look at the first item in the array to grab the location IDs!
+    const firstItem = req.items && req.items.length > 0 ? req.items[0] : {};
+
+    return {
+      request_id: req.id, // Now it maps strictly 1-to-1 with the actual request
+      from_name: locationMap.get(firstItem.from_id) || "Unknown Location", 
+      to_name: locationMap.get(firstItem.to_id) || "Unknown Location",     
+      status: req.status 
+    };
+  });
 }
 
 export async function getLocations() {
@@ -58,22 +66,52 @@ export async function getLocations() {
 export async function getInventoryByLocation(locationId: string) {
   const supabase = await createClient();
   
-  const { data, error } = await supabase
-    .from("location_inventory")
+  // 1. Fetch from the NEW location_materials table (No more location_inventory!)
+  const { data: locMaterials, error } = await supabase
+    .from("location_materials")
     .select(`
       id,
       quantity,
-      SKU,
-      materials ( description )
+      sku
     `)
     .eq("location_id", locationId)
     .gt("quantity", 0);
 
   if (error) {
-    console.log("Error fetching inventory:", error.message);
+    console.log("Error fetching location materials:", error.message);
     return [];
   }
-  return data;
+
+  // 2. FOOLPROOF FETCH: Grab the actual names from the materials table
+  const skus = Array.from(new Set(
+    locMaterials?.map(item => item.sku?.trim()).filter(Boolean) || []
+  ));
+  
+  const materialsMap = new Map();
+
+  if (skus.length > 0) {
+    const { data: materialsData, error: matError } = await supabase
+      .from("materials")
+      .select("sku, name")
+      .in("sku", skus);
+
+    if (matError) {
+      console.error("Error fetching material names:", matError.message);
+    } else if (materialsData) {
+      materialsData.forEach(mat => materialsMap.set(mat.sku.trim(), mat));
+    }
+  }
+
+  // 3. Stitch them together so your form has the SKU, Name, and Max Quantity!
+  return locMaterials?.map((item: any) => {
+    const material = materialsMap.get(item.sku?.trim()) || {};
+    return {
+      sku: item.sku,
+      available_quantity: item.quantity,
+      name: material.name || "Unknown Material",
+      display_label: `${material.name || "Unknown Material"} (Available: ${item.quantity})`
+    };
+  }) || [];
 }
 
 export async function getMaterialRequestById(id: string) {
@@ -169,12 +207,22 @@ export async function getMaterialRequestById(id: string) {
 export async function createMaterialRequest(formData: any) {
   const supabase = await createClient();
 
-  // 1. Insert the "Header" (The main request entry)
+  // 1. Get the currently logged-in user to attach as the foreman
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    console.log("Authentication Error:", authError?.message);
+    return { success: false, error: "You must be logged in to create a request." };
+  }
+
+  // 2. Insert the Header
+  // (Omitting 'id' triggers your private.gen_random_req() default automatically)
   const { data: requestData, error: requestError } = await supabase
     .from("materials_request")
     .insert([{ 
       date: formData.date, 
-      status: "pending" 
+      status: "pending",
+      foreman_id: user.id 
     }])
     .select("id")
     .single();
@@ -184,23 +232,29 @@ export async function createMaterialRequest(formData: any) {
     return { success: false, error: requestError?.message };
   }
 
-  // 2. Prepare the Line Items
+  // 3. Prepare the Line Items
   const lineItems = formData.items.map((item: any) => ({
+    // (Omitting 'id' triggers gen_random_uuid() automatically)
     request_id: requestData.id, 
     sku: item.sku,
     total: item.requestQty,
-    remaining: item.requestQty, // Initializes remaining to the original requested amount
+    remaining: item.requestQty, 
     from_id: formData.fromLocation, 
     to_id: formData.toLocation,
   }));
 
-  // 3. Insert all line items at once
+  // 4. Insert all line items at once
   const { error: lineItemsError } = await supabase
     .from("materials_request_materials")
     .insert(lineItems);
 
+  // 5. THE ROLLBACK SAFEGUARD
   if (lineItemsError) {
     console.log("Database Error (Lines):", lineItemsError.message);
+    
+    // If the items failed to save, instantly delete the header we just made so it doesn't leave a ghost request!
+    await supabase.from("materials_request").delete().eq("id", requestData.id);
+    
     return { success: false, error: lineItemsError.message };
   }
 

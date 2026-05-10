@@ -15,7 +15,7 @@ export const materialsRequestColumns: ColumnDef<MaterialsRequestItem>[] = [
     {
         accessorKey: 'request_id',
         header: 'Request ID',
-        cell: ({ row }) => <span className="font-bold text-gray-900">{row.original.request_id.substring(0, 8)}</span>
+        cell: ({ row }) => <span className="font-bold text-gray-900">{row.original.request_id}</span>
     },
     {
         accessorKey: 'from_name', // Tell the table to look for the new stitched name
