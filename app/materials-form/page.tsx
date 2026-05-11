@@ -32,25 +32,19 @@ export default function MaterialsForm() {
       try {
         const parsed = JSON.parse(savedData);
         
-        // 1. FOOLPROOF ID EXTRACTION
         const actualId = parsed?.rawRequest?.id || parsed?.id || '';
         const displayId = parsed?.displayId || parsed?.rawRequest?.id || parsed?.id || '';
         
         setRequestId(displayId);
         setDbId(actualId);
 
-        // 2. FOOLPROOF ITEM EXTRACTION
-        // Hunts down the items array no matter what format was passed in session storage
         let sourceItems = parsed?.rawRequest?.line_items || parsed?.line_items || parsed?.items || [];
 
-        // Filter by location
         if (savedLocationId) {
           sourceItems = sourceItems.filter((item: any) => item.to_id === savedLocationId);
         }
 
-        // 3. MAP TO FORM STATE
         const formattedItems = sourceItems.map((item: any) => {
-          // Grab 'remaining'. If missing, fallback to 'quantity' or 'total'
           let maxAllowed = 1;
           if (item.remaining !== undefined && item.remaining !== null) {
             maxAllowed = parseInt(item.remaining, 10);
@@ -61,10 +55,10 @@ export default function MaterialsForm() {
           }
 
           return {
-            sku: item.sku || item.id, // Fallback for older data shapes
+            sku: item.sku || item.id, 
             name: item.name || 'Unknown Material',
-            quantity: maxAllowed.toString(), // Default the box to the exact remaining amount
-            maxQty: maxAllowed,              // Hard-cap the box to the exact remaining amount
+            quantity: maxAllowed.toString(), 
+            maxQty: maxAllowed,              
             specifications: item.specifications || ''
           };
         });
@@ -79,7 +73,6 @@ export default function MaterialsForm() {
   }, [router]);
 
   const updateItemQty = (sku: string, val: string, maxQty: number) => {
-    // Allow empty string while the user is actively typing
     if (val === "") {
       setItems(items.map(item => item.sku === sku ? { ...item, quantity: "" } : item));
       return;
@@ -88,9 +81,8 @@ export default function MaterialsForm() {
     let finalQty = parseInt(val, 10);
     if (isNaN(finalQty)) return;
     
-    // Hard caps
     if (finalQty > maxQty) finalQty = maxQty;
-    if (finalQty < 0) finalQty = 0; // Prevent negatives
+    if (finalQty < 0) finalQty = 0; 
 
     setItems(items.map(item => item.sku === sku ? { ...item, quantity: finalQty.toString() } : item));
   };
@@ -102,9 +94,10 @@ export default function MaterialsForm() {
   };
 
   const handleFinalSubmit = async () => {
+    // BULLETPROOF: Synchronous block to completely prevent double-click race conditions!
+    if (isSubmitting) return; 
     setIsSubmitting(true);
     
-    // Only submit items where the quantity being received is greater than 0
     const itemsToSubmit = items
       .filter(item => parseInt(item.quantity.toString()) > 0)
       .map(item => ({
@@ -116,7 +109,7 @@ export default function MaterialsForm() {
 
     const result = await logMaterialFulfillment({
       dbId,
-      date, // PASSING THE DATE TO THE BACKEND
+      date, 
       items: itemsToSubmit
     });
 
@@ -126,11 +119,10 @@ export default function MaterialsForm() {
       router.push('/log-delivery');
     } else {
       alert(`Error: ${result.error}`);
-      setIsSubmitting(false);
+      setIsSubmitting(false); // Only re-enable the button if it failed!
     }
   };
 
-  // Prevent submission if all items are set to 0
   const validItemsCount = items.filter(item => parseInt(item.quantity.toString()) > 0).length;
 
   return (
@@ -159,7 +151,6 @@ export default function MaterialsForm() {
         {!isReviewMode && (
           <form onSubmit={handleProceedToReview} className="space-y-8">
 
-            {/* HEADER GRID (ID & DATE) */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               
               <div className="bg-gray-50 p-6 rounded-xl border border-gray-200">
@@ -189,7 +180,6 @@ export default function MaterialsForm() {
 
             </div>
 
-            {/* ITEMS LIST */}
             <div className="bg-gray-50 p-6 rounded-xl border border-gray-200">
               <h2 className="text-xl font-bold mb-4">Items Expected</h2>
 
@@ -201,7 +191,6 @@ export default function MaterialsForm() {
                     <div key={item.sku} className="p-5 bg-white border border-gray-200 rounded-lg shadow-sm">
                       <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
                         
-                        {/* Name - Read Only */}
                         <div className="md:col-span-5">
                           <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Material Name</label>
                           <p className="font-bold text-gray-900 truncate">{item.name}</p>
@@ -210,7 +199,6 @@ export default function MaterialsForm() {
                           )}
                         </div>
 
-                        {/* Quantity - Editable */}
                         <div className="md:col-span-7 flex items-center justify-end gap-4">
                           <label className="text-[10px] font-black text-gray-400 uppercase">Receiving Now</label>
                           <div className="flex items-center border border-gray-300 rounded-lg overflow-hidden bg-white w-40">
@@ -231,7 +219,6 @@ export default function MaterialsForm() {
                               onChange={(e) => updateItemQty(item.sku, e.target.value, item.maxQty)}
                               onBlur={(e) => {
                                 const val = parseInt(e.target.value);
-                                // If they completely empty the box, auto-correct it to the max amount
                                 if (isNaN(val)) {
                                   updateItemQty(item.sku, item.maxQty.toString(), item.maxQty);
                                 } else if (val < 0) {
@@ -260,7 +247,7 @@ export default function MaterialsForm() {
             <button
               type="submit"
               disabled={validItemsCount === 0}
-              className="w-full bg-blue-600 text-white font-bold text-lg py-5 rounded-xl hover:bg-blue-700 active:scale-[0.98] transition shadow-lg disabled:bg-gray-300 disabled:cursor-not-allowed"
+              className="w-full bg-blue-600 text-white font-bold text-lg py-5 rounded-xl hover:bg-blue-700 active:scale-[0.98] transition shadow-lg disabled:bg-gray-300"
             >
               {validItemsCount === 0 ? "No items to fulfill" : "Review Request Fulfillment Details"}
             </button>
@@ -292,7 +279,6 @@ export default function MaterialsForm() {
                     </tr>
                   </thead>
                   <tbody>
-                    {/* Only show items they are actually receiving right now */}
                     {items.filter(item => parseInt(item.quantity.toString()) > 0).map((item) => (
                       <tr key={item.sku} className="border-b border-gray-50 last:border-0 hover:bg-gray-50 transition">
                         <td className="p-4 font-bold text-gray-900">{item.quantity}</td>
