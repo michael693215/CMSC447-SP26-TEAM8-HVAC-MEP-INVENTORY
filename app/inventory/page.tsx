@@ -1,9 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
-import { products as seedProducts } from "../lib/data";
-import type { Product } from "../lib/data";
+import { getInventoryList } from "./actions";
 
 type SortKey = "name" | "category" | "qty" | "status" | "deliveries";
 type SortDir = "asc" | "desc";
@@ -29,11 +28,23 @@ function SortArrow({ active, dir }: { active: boolean; dir: SortDir }) {
 }
 
 export default function InventoryPage() {
-  const [products] = useState<Product[]>(seedProducts);
+  const [products, setProducts] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
   const [searchTerm, setSearchTerm] = useState("");
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: "name", dir: "asc" });
   const [categoryFilter, setCategoryFilter] = useState("All");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("All");
+
+  // Load live database inventory on mount
+  useEffect(() => {
+    async function loadData() {
+      const data = await getInventoryList();
+      setProducts(data);
+      setIsLoading(false);
+    }
+    loadData();
+  }, []);
 
   const categories = ["All", ...Array.from(new Set(products.map((p) => p.category))).sort()];
 
@@ -46,7 +57,9 @@ export default function InventoryPage() {
   const filtered = products.filter((item) => {
     const matchesSearch =
       item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.description.toLowerCase().includes(searchTerm.toLowerCase());
+      item.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.sku.toLowerCase().includes(searchTerm.toLowerCase()); // Added SKU search!
+      
     const matchesCategory = categoryFilter === "All" || item.category === categoryFilter;
     const matchesStatus = statusFilter === "All" || item.status === statusFilter;
     return matchesSearch && matchesCategory && matchesStatus;
@@ -55,8 +68,8 @@ export default function InventoryPage() {
   const sorted = [...filtered].sort((a, b) => {
     let cmp = 0;
     if (sort.key === "qty") cmp = a.qty - b.qty;
-    else if (sort.key === "deliveries") cmp = a.deliveryIds.length - b.deliveryIds.length;
-    else if (sort.key === "status") cmp = STATUS_ORDER[a.status] - STATUS_ORDER[b.status];
+    else if (sort.key === "deliveries") cmp = (a.deliveryIds?.length || 0) - (b.deliveryIds?.length || 0);
+    else if (sort.key === "status") cmp = STATUS_ORDER[a.status as keyof typeof STATUS_ORDER] - STATUS_ORDER[b.status as keyof typeof STATUS_ORDER];
     else cmp = String(a[sort.key]).localeCompare(String(b[sort.key]));
     return sort.dir === "asc" ? cmp : -cmp;
   });
@@ -94,8 +107,8 @@ export default function InventoryPage() {
             </span>
             <input
               type="text"
-              placeholder="Search by part name or description..."
-              className="input-themed block w-full pl-10 pr-3 py-2 text-sm"
+              placeholder="Search by part name, SKU, or description..."
+              className="input-themed block w-full pl-10 pr-3 py-2 text-sm border border-gray-300 rounded-md"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
@@ -105,9 +118,9 @@ export default function InventoryPage() {
             <select
               value={categoryFilter}
               onChange={(e) => setCategoryFilter(e.target.value)}
-              className="input-themed text-sm px-2 py-1.5"
+              className="input-themed text-sm px-2 py-1.5 border border-gray-300 rounded-md"
             >
-              {categories.map((c) => <option key={c} value={c}>{c}</option>)}
+              {categories.map((c) => <option key={c} value={c as string}>{c as string}</option>)}
             </select>
           </div>
           <div className="flex items-center gap-2 shrink-0">
@@ -115,7 +128,7 @@ export default function InventoryPage() {
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-              className="input-themed text-sm px-2 py-1.5"
+              className="input-themed text-sm px-2 py-1.5 border border-gray-300 rounded-md"
             >
               <option value="All">All</option>
               <option value="In Stock">In Stock</option>
@@ -128,7 +141,7 @@ export default function InventoryPage() {
         {/* Table */}
         <div className="bg-white shadow-md rounded-b-lg overflow-x-auto border border-gray-200">
           <table className="w-full min-w-[600px] text-left border-collapse">
-            <thead className="table-header-accent">
+            <thead className="table-header-accent bg-gray-50 text-gray-600">
               <tr>
                 <Th col="name" label="Product" sticky />
                 <th className="p-3 sm:p-4 border-b">Description</th>
@@ -139,17 +152,23 @@ export default function InventoryPage() {
               </tr>
             </thead>
             <tbody>
-              {sorted.length > 0 ? (
+              {isLoading ? (
+                 <tr>
+                 <td colSpan={6} className="p-10 text-center text-gray-500 font-medium">
+                   Loading real-time inventory...
+                 </td>
+               </tr>
+              ) : sorted.length > 0 ? (
                 sorted.map((item) => (
                   <tr key={item.id} className="hover:bg-blue-50 transition-colors border-b border-gray-100 cursor-pointer">
                     <td className="p-3 sm:p-4 border-b border-gray-100 font-bold whitespace-nowrap sticky left-0 z-10 bg-white shadow-[1px_0_0_#e5e7eb]">
-                      <Link href={`/inventory/${item.id}`} className="hover:underline text-black">
+                      <Link href={`/inventory/${item.id}`} className="hover:underline text-black block">
                         {item.name}
                       </Link>
                     </td>
                     <td className="p-3 sm:p-4 text-gray-600 italic text-sm">{item.description}</td>
                     <td className="p-3 sm:p-4 text-sm text-gray-700">{item.category}</td>
-                    <td className="p-3 sm:p-4 text-center font-mono">{item.qty}</td>
+                    <td className="p-3 sm:p-4 text-center font-mono text-lg">{item.qty}</td>
                     <td className="p-3 sm:p-4">
                       <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase whitespace-nowrap ${
                         item.status === "Low Stock" ? "bg-red-100 text-red-700"
@@ -162,9 +181,9 @@ export default function InventoryPage() {
                     <td className="p-3 sm:p-4 text-center">
                       <Link
                         href={`/inventory/${item.id}`}
-                        className="text-xs bg-blue-200 hover:bg-gray-800 hover:text-white px-3 py-1 rounded border border-black transition font-bold whitespace-nowrap"
+                        className="text-xs bg-blue-200 hover:bg-blue-700 hover:text-white px-3 py-1.5 rounded-md transition font-bold whitespace-nowrap"
                       >
-                        View ({item.deliveryIds.length})
+                        View ({item.deliveryIds?.length || 0})
                       </Link>
                     </td>
                   </tr>

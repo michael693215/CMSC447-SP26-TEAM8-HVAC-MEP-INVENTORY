@@ -1,29 +1,54 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { getProductById, getPurchaseOrdersForProduct } from "../../lib/data";
-import type { PurchaseOrderStatus } from "../../lib/data";
+import { getProductDetailBySku } from "../actions";
 
-const PO_STATUS_STYLES: Record<PurchaseOrderStatus, string> = {
-  Received: "bg-green-100 text-green-700",
+type PurchaseOrderStatus = "Received" | "In Transit" | "Pending";
+
+const PO_STATUS_STYLES: Record<string, string> = {
+  "Received": "bg-green-100 text-green-700",
   "In Transit": "bg-blue-100 text-blue-700",
-  Pending: "bg-yellow-100 text-yellow-700",
+  "Pending": "bg-yellow-100 text-yellow-700",
 };
 
 export default function ProductDetailPage() {
   const params = useParams();
-  const id = Number(params.id);
-  const product = getProductById(id);
-  const allPOs = getPurchaseOrdersForProduct(id);
+  const sku = decodeURIComponent(params.id as string); 
+  
+  const [product, setProduct] = useState<any>(null);
+  const [allPOs, setAllPOs] = useState<any[]>([]);
+  const [locations, setLocations] = useState<any[]>([]); // New state for locations
+  const [isLoading, setIsLoading] = useState(true);
 
   const [statusFilter, setStatusFilter] = useState<PurchaseOrderStatus | "All">("All");
+
+  useEffect(() => {
+    async function loadDetail() {
+      const data = await getProductDetailBySku(sku);
+      if (data) {
+        setProduct(data.product);
+        setAllPOs(data.allPOs);
+        setLocations(data.locations); // Saving locations to state
+      }
+      setIsLoading(false);
+    }
+    loadDetail();
+  }, [sku]);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center text-gray-500 px-4 font-medium">
+        Loading material details...
+      </div>
+    );
+  }
 
   if (!product) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center text-black px-4">
-        <p className="text-2xl font-bold mb-4">Product not found.</p>
+        <p className="text-2xl font-bold mb-4">Product not found in database.</p>
         <Link href="/inventory" className="text-blue-600 hover:underline">
           &larr; Back to Inventory
         </Link>
@@ -35,9 +60,10 @@ export default function ProductDetailPage() {
   const receiving = allPOs
     .filter((po) => po.status === "Pending" || po.status === "In Transit")
     .reduce((sum, po) => {
-      const item = po.items.find((i) => i.productId === id);
+      const item = po.items.find((i: any) => i.productId === sku);
       return sum + (item?.qty ?? 0);
     }, 0);
+    
   const total = inStock + receiving;
 
   const filteredPOs = statusFilter === "All"
@@ -54,13 +80,15 @@ export default function ProductDetailPage() {
         {/* Product header card */}
         <div className="bg-blue-200 border-2 border-black rounded-2xl p-5 sm:p-8 mb-6 sm:mb-8 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 shadow-lg">
           <div>
-            <p className="text-xs font-bold uppercase tracking-widest text-gray-600 mb-1">
-              {product.category}
+            <p className="text-xs font-bold uppercase tracking-widest text-gray-600 mb-1 flex items-center gap-2">
+              <span>{product.category}</span>
+              <span className="text-gray-400">|</span>
+              <span className="text-blue-800 bg-blue-100 px-1.5 py-0.5 rounded border border-blue-300">SKU: {product.sku}</span>
             </p>
             <h1 className="text-2xl sm:text-4xl font-black uppercase tracking-tight mb-2">{product.name}</h1>
             <p className="text-gray-700 text-base sm:text-lg">{product.description}</p>
           </div>
-          <span className={`self-start px-3 py-1 rounded text-xs font-bold uppercase whitespace-nowrap ${
+          <span className={`self-start px-3 py-1 rounded text-xs font-bold uppercase whitespace-nowrap border border-black/10 shadow-sm ${
             product.status === "Low Stock" ? "bg-red-100 text-red-700"
             : product.status === "Out of Stock" ? "bg-gray-200 text-gray-600"
             : "bg-green-100 text-green-700"
@@ -73,8 +101,8 @@ export default function ProductDetailPage() {
         <div className="grid grid-cols-3 gap-4 mb-8">
           <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm text-center">
             <p className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">In Stock</p>
-            <p className="text-5xl font-black">{inStock}</p>
-            <p className="text-xs text-gray-500 mt-1">units</p>
+            <p className="text-5xl font-black text-gray-900">{inStock}</p>
+            <p className="text-xs text-gray-500 mt-1">units across locations</p>
           </div>
           <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm text-center">
             <p className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-1">Receiving</p>
@@ -88,6 +116,35 @@ export default function ProductDetailPage() {
           </div>
         </div>
 
+        {/* NEW: Stock Locations List */}
+        <div className="mb-8">
+          <h2 className="text-lg sm:text-xl font-bold uppercase tracking-tight mb-4">Stock Locations</h2>
+          {locations.length > 0 ? (
+            <div className="bg-white shadow-sm rounded-lg border border-gray-200 overflow-hidden">
+              <table className="w-full text-left border-collapse">
+                <thead className="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    <th className="p-3 sm:p-4 text-xs font-bold uppercase tracking-wider text-gray-500">Location Name</th>
+                    <th className="p-3 sm:p-4 text-xs font-bold uppercase tracking-wider text-gray-500 text-right">Quantity Available</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {locations.map((loc, idx) => (
+                    <tr key={idx} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
+                      <td className="p-3 sm:p-4 font-medium text-gray-900">{loc.name}</td>
+                      <td className="p-3 sm:p-4 font-mono font-bold text-blue-700 text-right text-lg">{loc.quantity}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="bg-white rounded-lg border border-gray-200 p-6 text-center text-gray-500 italic">
+              No stock currently available at any location.
+            </div>
+          )}
+        </div>
+
         {/* Purchase orders table header */}
         <div className="mb-4 flex flex-wrap justify-between items-center gap-3">
           <h2 className="text-lg sm:text-xl font-bold uppercase tracking-tight">Associated Purchase Orders</h2>
@@ -96,7 +153,7 @@ export default function ProductDetailPage() {
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as PurchaseOrderStatus | "All")}
-              className="input-themed text-sm px-2 py-1"
+              className="input-themed text-sm px-2 py-1.5 border border-gray-300 rounded-md"
             >
               <option value="All">All</option>
               <option value="Pending">Pending</option>
@@ -109,18 +166,18 @@ export default function ProductDetailPage() {
         {allPOs.length > 0 ? (
           <div className="bg-white shadow-md rounded-lg overflow-x-auto border border-gray-200">
             <table className="w-full min-w-[600px] text-left border-collapse">
-              <thead className="table-header-accent">
+              <thead className="table-header-accent bg-gray-50 text-gray-600">
                 <tr>
                   <th className="p-3 sm:p-4 border-b sticky left-0 z-20 bg-blue-200">PO #</th>
                   <th className="p-3 sm:p-4 border-b">Order Date</th>
-                  <th className="p-3 sm:p-4 border-b">Location</th>
-                  <th className="p-3 sm:p-4 border-b text-center">Qty</th>
+                  <th className="p-3 sm:p-4 border-b">Dest. Location</th>
+                  <th className="p-3 sm:p-4 border-b text-center">Qty Pending</th>
                   <th className="p-3 sm:p-4 border-b text-center">Status</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredPOs.length > 0 ? filteredPOs.map((po) => {
-                  const itemQty = po.items.find((i) => i.productId === id)?.qty ?? 0;
+                  const itemQty = po.items.find((i: any) => i.productId === sku)?.qty ?? 0;
                   return (
                   <tr key={po.id} className="hover:bg-blue-50 transition-colors border-b border-gray-100">
                     <td className="p-3 sm:p-4 font-mono font-bold text-sm sticky left-0 z-10 bg-white shadow-[1px_0_0_#e5e7eb]">
@@ -128,9 +185,9 @@ export default function ProductDetailPage() {
                     </td>
                     <td className="p-3 sm:p-4 text-sm whitespace-nowrap">{po.date}</td>
                     <td className="p-3 sm:p-4 text-sm text-gray-700">{po.location}</td>
-                    <td className="p-3 sm:p-4 text-center font-mono">{itemQty}</td>
+                    <td className="p-3 sm:p-4 text-center font-mono text-lg font-bold">{itemQty}</td>
                     <td className="p-3 sm:p-4 text-center">
-                      <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase whitespace-nowrap ${PO_STATUS_STYLES[po.status]}`}>
+                      <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase whitespace-nowrap ${PO_STATUS_STYLES[po.status] || "bg-gray-100 text-gray-600"}`}>
                         {po.status}
                       </span>
                     </td>
@@ -145,23 +202,10 @@ export default function ProductDetailPage() {
                 )}
               </tbody>
             </table>
-
-            {allPOs.some((po) => po.notes) && (
-              <div className="p-4 border-t border-gray-200">
-                <p className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">Notes</p>
-                {allPOs
-                  .filter((po) => po.notes)
-                  .map((po) => (
-                    <p key={po.id} className="text-sm text-gray-700">
-                      <span className="font-mono font-bold">{po.id}</span>: {po.notes}
-                    </p>
-                  ))}
-              </div>
-            )}
           </div>
         ) : (
           <div className="bg-white rounded-lg border border-gray-200 p-10 text-center text-gray-500 italic">
-            No purchase orders recorded for this product.
+            No active purchase orders recorded for this product yet.
           </div>
         )}
       </div>
