@@ -4,8 +4,19 @@ import { getMaterialRequestById } from "../actions";
 
 const STATUS_STYLES: Record<string, string> = {
   "Fulfilled": "bg-green-100 text-green-700",
+  "completed": "bg-green-100 text-green-700", 
   "In Transit": "bg-blue-100 text-blue-700",
   "Pending": "bg-yellow-100 text-yellow-700",
+  "pending": "bg-yellow-100 text-yellow-700",
+};
+
+// Helper function to force consistent MM/DD/YYYY formatting 
+// This prevents JavaScript timezone bugs from shifting the day backward!
+const formatDate = (dateString: string | null) => {
+  if (!dateString) return "";
+  const datePart = dateString.split('T')[0]; // Strips off the time if it exists
+  const [year, month, day] = datePart.split('-');
+  return `${month}/${day}/${year}`; 
 };
 
 export default async function RequestDetailsPage({ 
@@ -51,16 +62,23 @@ export default async function RequestDetailsPage({
             {/* CLEAN NEW LAYOUT: Unified metadata box */}
             <div className="bg-white/60 border border-blue-300 rounded-lg p-4 shadow-sm flex flex-col gap-3 w-fit min-w-[300px]">
               
-              {/* Top row: Employee and Date */}
-              <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6">
+              {/* Top row: Employee and Dates */}
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6 flex-wrap">
                 <div className="text-sm text-gray-800">
                   <span className="font-bold text-gray-500 uppercase text-xs tracking-wider mr-2">Requested By:</span>
                   <span className="font-black text-base">{employeeName}</span>
                 </div>
                 {request.date && (
                   <div className="text-sm text-gray-800">
-                    <span className="font-bold text-gray-500 uppercase text-xs tracking-wider mr-2">Date:</span>
-                    <span className="font-medium">{request.date}</span>
+                    <span className="font-bold text-gray-500 uppercase text-xs tracking-wider mr-2">Requested:</span>
+                    <span className="font-medium">{formatDate(request.date)}</span>
+                  </div>
+                )}
+                {/* Fulfillment Date Badge */}
+                {request.fulfillment_date && (
+                  <div className="text-sm text-green-800 bg-green-100/80 px-2 py-0.5 rounded border border-green-300 flex items-center">
+                    <span className="font-bold text-green-700 uppercase text-xs tracking-wider mr-2">Fulfilled:</span>
+                    <span className="font-bold">{formatDate(request.fulfillment_date)}</span>
                   </div>
                 )}
               </div>

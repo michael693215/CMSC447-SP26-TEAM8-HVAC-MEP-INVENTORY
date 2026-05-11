@@ -117,7 +117,7 @@ export async function getInventoryByLocation(locationId: string) {
 export async function getMaterialRequestById(id: string) {
   const supabase = await createClient();
 
-  // 1. Get the main header AND join the employee table!
+  // 1. Get the main header AND join the employee table
   const { data: request, error: reqError } = await supabase
     .from("materials_request")
     .select(`
@@ -138,7 +138,17 @@ export async function getMaterialRequestById(id: string) {
     ? `${employeeData.first_name} ${employeeData.last_name}`.trim()
     : "Unknown Employee";
 
-  // 2. Get the connected line items
+  // 2. NEW: Fetch the latest fulfillment date for this request
+  const { data: fulfillments } = await supabase
+    .from("fulfillment")
+    .select("datetime")
+    .eq("request_id", id)
+    .order("datetime", { ascending: false })
+    .limit(1);
+    
+  const fulfillmentDate = fulfillments && fulfillments.length > 0 ? fulfillments[0].datetime : null;
+
+  // 3. Get the connected line items
   const { data: lineItems, error: linesError } = await supabase
     .from("materials_request_materials")
     .select(`
@@ -151,11 +161,9 @@ export async function getMaterialRequestById(id: string) {
     `)
     .eq("request_id", id);
 
-  if (linesError) {
-    console.error("Error fetching line items:", linesError.message);
-  }
+  if (linesError) console.error("Error fetching line items:", linesError.message);
 
-  // 3. FOOLPROOF FETCH for Materials
+  // 4. FOOLPROOF FETCH for Materials
   const skus = Array.from(new Set(
     lineItems?.map(item => item.sku?.trim()).filter(Boolean) || []
   ));
@@ -168,23 +176,16 @@ export async function getMaterialRequestById(id: string) {
       .select("sku, name, description")
       .in("sku", skus);
 
-    if (matError) {
-      console.error("Error fetching materials:", matError.message);
-    } else if (materialsData) {
-      materialsData.forEach(mat => materialsMap.set(mat.sku.trim(), mat));
-    }
+    if (matError) console.error("Error fetching materials:", matError.message);
+    else if (materialsData) materialsData.forEach(mat => materialsMap.set(mat.sku.trim(), mat));
   }
 
-  // 4. Get Locations
   const locations = await getLocations();
   const locationMap = new Map(locations.map(loc => [loc.id, loc.name]));
 
   // 5. Format everything for the UI
   const formattedItems = (lineItems || []).map((item: any, index: number) => {
-    
-    // Trim the lookup key too so it matches perfectly!
     const material = materialsMap.get(item.sku?.trim()) || {};
-
     return {
       line_number: index + 1, 
       quantity: item.total, 
@@ -199,7 +200,8 @@ export async function getMaterialRequestById(id: string) {
 
   return {
     ...request,
-    employee_name: employeeName, // <-- We append the formatted name here!
+    employee_name: employeeName, 
+    fulfillment_date: fulfillmentDate, // <-- WE PASS THE NEW DATE HERE!
     items: formattedItems
   };
 }
