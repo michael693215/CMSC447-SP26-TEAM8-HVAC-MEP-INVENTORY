@@ -122,7 +122,7 @@ export async function logMaterialFulfillment({ dbId, date, items }: FulfillmentP
         if (destInv) {
           const newDestQty = Number(destInv.quantity) + totalReceivedForSku;
           
-          // We do the standard addition
+          
           await supabase.from('location_materials').update({ quantity: newDestQty }).eq('id', destInv.id);
           
 
