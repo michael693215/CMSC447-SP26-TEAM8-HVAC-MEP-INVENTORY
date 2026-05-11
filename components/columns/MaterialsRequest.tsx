@@ -48,7 +48,7 @@ export const materialsRequestColumns: ColumnDef<MaterialsRequestItem>[] = [
         cell: ({ table, row }) => {
             const role = (table.options.meta as any)?.role;  
             
-            if (role == 'administrator' || role == 'project_manager') return (
+            if (role == 'administrator' || role == 'project_manager'|| role == 'foreman') return (
                 <div className="text-center">
                     <Link
                         href={`/materials-requests/${row.original.request_id}`}
