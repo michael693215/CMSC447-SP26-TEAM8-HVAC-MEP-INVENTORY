@@ -2,9 +2,8 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import Link from "next/link";
-import { addPurchaseOrder, generatePOId, formatDeliveryDate, getAllLocations, addLocation } from "../lib/store";
-import type { Location } from "../lib/data";
 import { createClient } from "@/lib/supabase/client";
+import { getActiveLocations, submitPurchaseOrder } from "./actions";
 
 interface LineItem {
   productName: string;
@@ -16,26 +15,26 @@ interface LineItem {
 interface POForm {
   poNumber: string;
   date: string;
-  location: string;
-  newLocation: string;
+  locationId: string;
 }
 
 const EMPTY_FORM: POForm = {
   poNumber: "",
   date: "",
-  location: "",
-  newLocation: "",
+  locationId: "",
 };
 
 const EMPTY_ITEM: LineItem = { productName: "", qty: "", specs: "", showSpecs: false };
-
-const ADD_NEW_VALUE = "__new__";
 
 const SKIP_WORDS = new Set([
   "total", "subtotal", "tax", "shipping", "discount", "page",
   "qty", "quantity", "price", "amount", "unit", "description", "item",
 ]);
 
+// Fallback ID generator if PDF doesn't have one
+const generatePOId = () => "PO-" + Math.floor(100000 + Math.random() * 900000);
+
+// --- PDF EXTRACTION LOGIC (UNTOUCHED) ---
 function extractPONumber(text: string): string | null {
   const patterns = [
     /P\.?\s*O\.?\s*(?:NUMBER|Number|No\.?|#|Num\.?)?\s*(?:[:\-]\s*|\s{2,})(?!Box\b)([A-Z]{0,3}[-\s]?\d{3,})/i,
@@ -192,7 +191,6 @@ function extractSpecs(text: string, productName: string): string {
       if (specParts.length > 0) break;
       continue;
     }
-    // Stop at a new product line (qty at start or right-aligned)
     if (/^[ \t]*\d{1,4}[ \t]{2,}[A-Z]/.test(lines[i])) break;
     if (/^.{5,80}\s{2,}\d{1,4}\s*$/.test(line)) break;
 
@@ -212,6 +210,7 @@ function extractSpecs(text: string, productName: string): string {
   return specParts.join("\n");
 }
 
+// --- ICONS ---
 function UploadIcon() {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" className="w-8 h-8 mx-auto text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -219,7 +218,6 @@ function UploadIcon() {
     </svg>
   );
 }
-
 function SpinnerIcon() {
   return (
     <svg className="w-8 h-8 mx-auto animate-spin text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -228,7 +226,6 @@ function SpinnerIcon() {
     </svg>
   );
 }
-
 function CheckCircleIcon() {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" className="w-8 h-8 mx-auto text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -236,7 +233,6 @@ function CheckCircleIcon() {
     </svg>
   );
 }
-
 function XCircleIcon() {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" className="w-8 h-8 mx-auto text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -244,7 +240,6 @@ function XCircleIcon() {
     </svg>
   );
 }
-
 function SuccessCheckIcon() {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" className="w-16 h-16 mx-auto text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -253,34 +248,49 @@ function SuccessCheckIcon() {
   );
 }
 
+// --- MAIN COMPONENT ---
 export default function PurchaseOrderPage() {
   const [form, setForm] = useState<POForm>(EMPTY_FORM);
   const [items, setItems] = useState<LineItem[]>([{ ...EMPTY_ITEM }]);
-  const [locations, setLocations] = useState<Location[]>([]);
+  const [locations, setLocations] = useState<{ id: string, name: string }[]>([]);
+  
+  // Custom dropdown state
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  
   const [submitted, setSubmitted] = useState(false);
   const [submittedPOId, setSubmittedPOId] = useState("");
-  const [submittedLocation, setSubmittedLocation] = useState("");
+  const [submittedLocationName, setSubmittedLocationName] = useState("");
+  
   const [uploadStatus, setUploadStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [uploadMessage, setUploadMessage] = useState("");
   const [isDragging, setIsDragging] = useState(false);
+  
   const [pdfDoc, setPdfDoc] = useState<any>(null);
   const [pdfFileName, setPdfFileName] = useState("");
   const [previewPage, setPreviewPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
   const [previewScale, setPreviewScale] = useState(1.2);
+  
   const [showConfirm, setShowConfirm] = useState(false);
   const [showDuplicate, setShowDuplicate] = useState(false);
   const [duplicatePO, setDuplicatePO] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const supabase = createClient();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const renderTaskRef = useRef<any>(null);
+  const supabase = createClient();
 
+  // Load locations on mount
   useEffect(() => {
-    setLocations(getAllLocations());
+    async function loadLocations() {
+      const locs = await getActiveLocations();
+      setLocations(locs);
+    }
+    loadLocations();
   }, []);
 
+  // Handle PDF Preview Rendering
   useEffect(() => {
     if (!pdfDoc || !canvasRef.current) return;
     let cancelled = false;
@@ -329,22 +339,18 @@ export default function PurchaseOrderPage() {
     setItems((prev) => prev.filter((_, i) => i !== idx));
   }
 
-  function resolvedLocation(): string {
-    if (form.location === ADD_NEW_VALUE) return form.newLocation.trim();
-    return form.location;
-  }
-
   async function handleSubmit(e: React.SyntheticEvent) {
     e.preventDefault();
     const validItems = items.filter((it) => it.productName.trim() && it.qty.trim());
-    if (validItems.length === 0) return;
-    if (form.location === ADD_NEW_VALUE && !form.newLocation.trim()) return;
+    if (validItems.length === 0 || !form.locationId) return;
 
     const poId = form.poNumber.trim() || generatePOId();
+    
+    // Quick client-side check to see if PO exists
     const { data: existing } = await supabase
       .from("purchase_order")
-      .select("PO_number")
-      .eq("PO_number", poId)
+      .select("po_number")
+      .eq("po_number", poId)
       .maybeSingle();
 
     if (existing) {
@@ -353,6 +359,8 @@ export default function PurchaseOrderPage() {
       return;
     }
 
+    // Set auto-generated PO if it was blank
+    setForm(prev => ({...prev, poNumber: poId}));
     setShowConfirm(true);
   }
 
@@ -361,58 +369,29 @@ export default function PurchaseOrderPage() {
     setSubmitting(true);
 
     const validItems = items.filter((it) => it.productName.trim() && it.qty.trim());
-    const poId = form.poNumber.trim() || generatePOId();
-    const locationName = resolvedLocation();
     const isoDate = form.date || new Date().toISOString().split("T")[0];
+    const locName = locations.find(l => l.id === form.locationId)?.name || "Unknown";
 
-    // Insert into Supabase
-    const { error: poError } = await supabase
-      .from("purchase_order")
-      .insert([{ PO_number: poId, date: isoDate, status: "Pending", location: locationName }]);
+    // Call the Server Action!
+    const result = await submitPurchaseOrder({
+      poNumber: form.poNumber,
+      date: isoDate,
+      locationId: form.locationId,
+      items: validItems.map(it => ({
+        productName: it.productName.trim(),
+        qty: parseInt(it.qty, 10),
+        specs: it.specs.trim()
+      }))
+    });
 
-    if (poError) {
-      alert("Failed to save purchase order: " + poError.message);
+    if (!result.success) {
+      alert("Failed to submit PO: " + result.error);
       setSubmitting(false);
       return;
     }
 
-    if (validItems.length > 0) {
-      await supabase.from("po_materials").insert(
-        validItems.map((it, idx) => ({
-          PO_number: poId,
-          line_number: idx + 1,
-          quantity: parseInt(it.qty, 10),
-          product_name: it.productName.trim(),
-        }))
-      );
-    }
-
-    // Keep local storage in sync
-    if (form.location === ADD_NEW_VALUE && locationName) {
-      const newLoc = addLocation(locationName);
-      setLocations((prev) => [...prev, newLoc]);
-    }
-
-    const dateDisplay = form.date
-      ? formatDeliveryDate(form.date)
-      : new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-
-    addPurchaseOrder({
-      id: poId,
-      date: dateDisplay,
-      location: locationName,
-      items: validItems.map((it) => ({
-        productId: 0,
-        productName: it.productName.trim(),
-        qty: parseInt(it.qty, 10),
-        specs: it.specs.trim() || undefined,
-      })),
-      status: "Pending",
-      notes: "",
-    });
-
-    setSubmittedPOId(poId);
-    setSubmittedLocation(locationName);
+    setSubmittedPOId(form.poNumber);
+    setSubmittedLocationName(locName);
     setShowConfirm(false);
     setSubmitted(true);
     setSubmitting(false);
@@ -423,13 +402,14 @@ export default function PurchaseOrderPage() {
     setItems([{ ...EMPTY_ITEM }]);
     setSubmitted(false);
     setSubmittedPOId("");
-    setSubmittedLocation("");
+    setSubmittedLocationName("");
     setUploadStatus("idle");
     setUploadMessage("");
     setPdfDoc(null);
     setPdfFileName("");
     setPreviewPage(1);
     setTotalPages(0);
+    setDropdownOpen(false);
   }
 
   async function processFile(file: File) {
@@ -534,6 +514,7 @@ export default function PurchaseOrderPage() {
     if (file) processFile(file);
   }
 
+  // --- RENDER SUCCESS ---
   if (submitted) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-4 sm:p-8 text-black">
@@ -541,31 +522,31 @@ export default function PurchaseOrderPage() {
           <div className="mb-6"><SuccessCheckIcon /></div>
           <h2 className="text-2xl font-black uppercase mb-2">Order Submitted</h2>
           <p className="text-gray-600 mb-2">
-            Purchase Order <span className="font-mono font-bold">{submittedPOId}</span> has been recorded.
+            Purchase Order <span className="font-mono font-bold text-blue-600">{submittedPOId}</span> has been recorded.
           </p>
-          <p className="text-gray-500 text-sm mb-8">
-            {items.filter((it) => it.productName.trim()).length} product{items.filter((it) => it.productName.trim()).length !== 1 ? "s" : ""} to {submittedLocation || "—"}
+          <p className="text-gray-500 text-sm mb-8 font-medium">
+            {items.filter((it) => it.productName.trim()).length} product{items.filter((it) => it.productName.trim()).length !== 1 ? "s" : ""} routing to <span className="text-black font-bold">{submittedLocationName}</span>.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
-            <button onClick={handleReset} className="btn-primary">+ New Order</button>
-            <Link href="/purchase-orders" className="btn-secondary py-2 px-4 rounded-md text-center">
+            <button onClick={handleReset} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md transition shadow-md flex-1">
+              + New Order
+            </button>
+            <Link href="/purchase-orders" className="bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold py-2 px-4 rounded-md transition flex-1 flex items-center justify-center">
               View All Orders
             </Link>
           </div>
-          <Link href="/" className="mt-3 inline-block text-sm font-medium text-blue-600 hover:underline">
-            &larr; Back to Dashboard
-          </Link>
         </div>
       </div>
     );
   }
 
+  // --- RENDER FORM ---
   return (
     <>
     <div className="min-h-screen p-4 sm:p-8 text-black">
       <div className="max-w-2xl mx-auto">
-        <Link href="/" className="text-blue-600 hover:underline mb-4 inline-block font-medium">
-          &larr; Back to Dashboard
+        <Link href="/purchase-orders" className="text-blue-600 hover:underline mb-4 inline-block font-medium">
+          &larr; Back to Purchase Orders
         </Link>
 
         <div className="mb-6">
@@ -676,7 +657,6 @@ export default function PurchaseOrderPage() {
         <div className="bg-white rounded-2xl border border-gray-200 shadow-md p-5 sm:p-8">
           <form onSubmit={handleSubmit} className="flex flex-col gap-5 sm:gap-6">
 
-            {/* PO Number + Date */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="flex flex-col gap-1">
                 <label className="text-xs font-bold uppercase tracking-wider text-gray-600">PO Number</label>
@@ -685,7 +665,7 @@ export default function PurchaseOrderPage() {
                   value={form.poNumber}
                   onChange={handleFormChange}
                   placeholder="Auto-generated if blank"
-                  className="input-themed p-2 text-black w-full font-mono"
+                  className="p-2 border border-gray-300 rounded-md text-black w-full font-mono focus:ring-2 focus:ring-blue-500 focus:outline-none"
                 />
               </div>
               <div className="flex flex-col gap-1">
@@ -697,41 +677,54 @@ export default function PurchaseOrderPage() {
                   type="date"
                   value={form.date}
                   onChange={handleFormChange}
-                  className="input-themed p-2 text-black w-full"
+                  className="p-2 border border-gray-300 rounded-md text-black w-full focus:ring-2 focus:ring-blue-500 focus:outline-none"
                   required
                 />
               </div>
             </div>
 
-            {/* Location */}
-            <div className="flex flex-col gap-1">
+            {/* CUSTOM LOCATION DROPDOWN */}
+            <div className="flex flex-col gap-1 relative">
               <label className="text-xs font-bold uppercase tracking-wider text-gray-600">
                 Location <span className="text-red-500">*</span>
               </label>
-              <select
-                name="location"
-                value={form.location}
-                onChange={handleFormChange}
-                className="input-themed p-2 text-black w-full"
-                required
-              >
-                <option value="" disabled>Select a location…</option>
-                <option value={ADD_NEW_VALUE}>+ Add new location</option>
-                {locations.map((loc) => (
-                  <option key={loc.id} value={loc.name}>{loc.name}</option>
-                ))}
-              </select>
-              {form.location === ADD_NEW_VALUE && (
-                <input
-                  name="newLocation"
-                  value={form.newLocation}
-                  onChange={handleFormChange}
-                  placeholder="Enter new location name"
-                  className="input-themed p-2 text-black w-full mt-1"
-                  required
-                  autoFocus
-                />
-              )}
+              <div className="relative w-full">
+                <button
+                  type="button"
+                  onClick={() => setDropdownOpen(!dropdownOpen)}
+                  className="w-full p-2 border border-gray-300 rounded-md bg-white text-left focus:outline-none focus:ring-2 focus:ring-blue-500 flex justify-between items-center"
+                >
+                  <span className={`truncate ${!form.locationId ? 'text-gray-400' : 'text-black'}`}>
+                    {form.locationId 
+                      ? locations.find(l => l.id === form.locationId)?.name 
+                      : 'Select a location...'}
+                  </span>
+                  <svg className={`h-5 w-5 text-gray-500 transition-transform ${dropdownOpen ? 'rotate-180' : ''}`} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                    <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/>
+                  </svg>
+                </button>
+
+                {dropdownOpen && (
+                  <div className="absolute z-10 w-full mt-2 bg-white border border-gray-200 rounded-lg shadow-xl overflow-hidden max-h-60 overflow-y-auto">
+                    {locations.map((loc) => (
+                      <button
+                        type="button"
+                        key={loc.id}
+                        onClick={() => { 
+                          setForm(prev => ({ ...prev, locationId: loc.id })); 
+                          setDropdownOpen(false); 
+                        }}
+                        className={`w-full text-left px-4 py-3 text-sm hover:bg-blue-50 transition ${form.locationId === loc.id ? 'bg-blue-100 font-bold text-blue-800' : 'text-gray-700'}`}
+                      >
+                        {loc.name}
+                      </button>
+                    ))}
+                    {locations.length === 0 && (
+                      <div className="p-4 text-gray-400 italic text-sm">Loading locations...</div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Line Items */}
@@ -754,7 +747,7 @@ export default function PurchaseOrderPage() {
                         value={item.productName}
                         onChange={(e) => handleItemChange(idx, "productName", e.target.value)}
                         placeholder="Product name"
-                        className="input-themed p-2 text-black flex-1 text-sm"
+                        className="p-2 border border-gray-300 rounded-md text-black flex-1 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
                         required={idx === 0}
                       />
                       <input
@@ -763,7 +756,7 @@ export default function PurchaseOrderPage() {
                         value={item.qty}
                         onChange={(e) => handleItemChange(idx, "qty", e.target.value)}
                         placeholder="Qty"
-                        className="input-themed p-2 text-black w-20 font-mono text-sm"
+                        className="p-2 border border-gray-300 rounded-md text-black w-20 font-mono text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
                         required={idx === 0}
                       />
                       {items.length > 1 && (
@@ -796,7 +789,6 @@ export default function PurchaseOrderPage() {
                           type="button"
                           onClick={() => toggleSpecs(idx)}
                           className="mt-1 text-gray-400 hover:text-red-500 transition-colors shrink-0"
-                          aria-label="Hide specifications"
                           title="Hide specifications"
                         >
                           <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
@@ -822,8 +814,12 @@ export default function PurchaseOrderPage() {
             </div>
 
             <div className="flex flex-col sm:flex-row gap-3 pt-2">
-              <button type="submit" className="btn-primary sm:flex-1">Submit Purchase Order</button>
-              <button type="button" onClick={handleReset} className="btn-secondary sm:flex-1">Clear Form</button>
+              <button type="submit" className="btn-primary sm:flex-1">
+                Submit Purchase Order
+              </button>
+              <button type="button" onClick={handleReset} className="bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold py-3 rounded-lg transition sm:flex-1">
+                Clear Form
+              </button>
             </div>
           </form>
         </div>
@@ -840,7 +836,7 @@ export default function PurchaseOrderPage() {
           </p>
           <button
             onClick={() => setShowDuplicate(false)}
-            className="btn-primary w-full"
+            className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md transition w-full"
           >
             Back
           </button>
@@ -862,11 +858,11 @@ export default function PurchaseOrderPage() {
             </div>
             <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
               <span className="font-bold text-gray-600 sm:w-36 sm:shrink-0">Date</span>
-              <span>{form.date || "—"}</span>
+              <span>{form.date ? new Intl.DateTimeFormat('en-US').format(new Date(form.date)) : "—"}</span>
             </div>
             <div className="flex flex-col gap-0.5 sm:flex-row sm:gap-2">
               <span className="font-bold text-gray-600 sm:w-36 sm:shrink-0">Location</span>
-              <span>{resolvedLocation() || "—"}</span>
+              <span>{locations.find(l => l.id === form.locationId)?.name || "—"}</span>
             </div>
             <div>
               <span className="font-bold text-gray-600 block mb-1">Products</span>
@@ -887,10 +883,10 @@ export default function PurchaseOrderPage() {
           </div>
 
           <div className="flex flex-col sm:flex-row gap-3">
-            <button onClick={confirmSubmit} className="btn-primary sm:flex-1" disabled={submitting}>
+            <button onClick={confirmSubmit} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md transition shadow-md sm:flex-1" disabled={submitting}>
               {submitting ? "Submitting…" : "Confirm & Submit"}
             </button>
-            <button onClick={() => setShowConfirm(false)} className="btn-secondary sm:flex-1" disabled={submitting}>Edit</button>
+            <button onClick={() => setShowConfirm(false)} className="bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold py-2 px-4 rounded-md transition sm:flex-1" disabled={submitting}>Edit</button>
           </div>
         </div>
       </div>

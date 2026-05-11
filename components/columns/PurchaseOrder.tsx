@@ -18,7 +18,7 @@ export const getPurchaseOrderColumns = (
         accessorKey: 'po_number',
         header: 'PO #',
         cell: ({ row }) => (
-            <span className="font-bold text-blue-700">
+            <span className="font-bold text-black">
                 {row.original.po_number}
             </span>
         )
@@ -32,10 +32,8 @@ export const getPurchaseOrderColumns = (
         accessorKey: 'items_count',
         header: () => <div className="text-center">Materials</div>,
         cell: ({ row }) => (
-            <div className="text-center">
-                <span className="inline-block w-28 text-center text-xs bg-blue-200 text-black px-3 py-1 rounded border border-black font-bold whitespace-nowrap">
-                    {row.original.items_count} {row.original.items_count === 1 ? "material" : "materials"}
-                </span>
+            <div className="text-center font-mono text-lg font-bold">
+                {row.original.items_count}
             </div>
         )
     },
@@ -53,7 +51,7 @@ export const getPurchaseOrderColumns = (
             let bgClass = "bg-gray-100 text-gray-600";
             if (status === "Received") bgClass = "bg-green-100 text-green-700";
             if (status === "In Transit") bgClass = "bg-blue-100 text-blue-700";
-            if (status === "Pending") bgClass = "bg-yellow-100 text-yellow-700";
+            if (status === "Pending" || status === "pending") bgClass = "bg-yellow-100 text-yellow-700";
 
             return (
                 <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase whitespace-nowrap ${bgClass}`}>
