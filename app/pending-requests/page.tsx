@@ -130,7 +130,7 @@ export default function PendingRequests() {
               data={displayedRequests} 
               // Passing administrator as a default role so the actions render
               role={"administrator" as any} 
-              // This gives us the row hover effect from the Builder
+              // This gives us the row hover effect from the Builders
               onRowClick={(row) => handleSelectRequest(row.rawRequest)}
             />
           )}
