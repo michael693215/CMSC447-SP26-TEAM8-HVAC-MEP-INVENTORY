@@ -5,19 +5,17 @@ import { useRouter } from "next/navigation";
 import { getLocations, getInventoryByLocation, createMaterialRequest } from "../actions";
 
 interface InventoryItem {
-  id: string; 
-  SKU: string;
-  quantity: number; 
-  materials: { description: string };
+  sku: string;
+  available_quantity: number; 
+  name: string;
+  display_label: string; 
 }
 
 interface CartItem {
-  inventoryId: string;
   sku: string;
-  description: string;
+  name: string;
   maxQty: number; 
-  // Allow string so the user can temporarily clear the box while typing
-  requestQty: number | string; 
+  requestQty: number | string; // Allows empty string while typing
 }
 
 export default function NewMaterialsRequest() {
@@ -27,7 +25,8 @@ export default function NewMaterialsRequest() {
   const [locations, setLocations] = useState<any[]>([]);
   const [availableInventory, setAvailableInventory] = useState<InventoryItem[]>([]);
   
-  const [date, setDate] = useState("");
+
+  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [fromLocation, setFromLocation] = useState("");
   const [toLocation, setToLocation] = useState("");
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -59,46 +58,37 @@ export default function NewMaterialsRequest() {
         return;
       }
       const inv = await getInventoryByLocation(fromLocation);
-      setAvailableInventory(inv as any[]); 
+      setAvailableInventory(inv as InventoryItem[]); 
       setCart([]); 
     }
     fetchInventory();
-  }, [fromLocation]);
+  }, [fromLocation, toLocation]);
 
   const handleAddToCart = (item: InventoryItem) => {
-    if (cart.find((c) => c.sku === item.SKU)) return;
+    if (cart.find((c) => c.sku === item.sku)) return;
     setCart([...cart, {
-      inventoryId: item.id,
-      sku: item.SKU,
-      description: item.materials?.description || "Unknown Item",
-      maxQty: item.quantity,
+      sku: item.sku,
+      name: item.name, 
+      maxQty: item.available_quantity,
       requestQty: 1 
     }]);
   };
 
-  // ONLY updates the state with what the user types (allows empty string)
-  const updateCartQty = (sku: string, val: string) => {
-    if (val === '') {
-      setCart(cart.map(c => c.sku === sku ? { ...c, requestQty: '' } : c));
+  const updateCartQty = (sku: string, val: string, maxQty: number) => {
+    // 1. If the user deletes everything, let the box stay empty
+    if (val === "") {
+      setCart(cart.map(c => c.sku === sku ? { ...c, requestQty: "" } : c));
       return;
     }
-    const num = parseInt(val);
-    if (!isNaN(num)) {
-      setCart(cart.map(c => c.sku === sku ? { ...c, requestQty: num } : c));
-    }
-  };
 
-  // Runs onBlur (when user clicks away) to correct the value
-  const clampCartQty = (sku: string, maxQty: number) => {
-    setCart(cart.map(c => {
-      if (c.sku === sku) {
-        let num = parseInt(c.requestQty.toString());
-        if (isNaN(num) || num < 1) num = 1;
-        if (num > maxQty) num = maxQty;
-        return { ...c, requestQty: num };
-      }
-      return c;
-    }));
+    // 2. Parse the number safely
+    let finalQty = parseInt(val, 10);
+    if (isNaN(finalQty)) return;
+
+    // 3. Prevent them from requesting more than the available stock
+    if (finalQty > maxQty) finalQty = maxQty;
+
+    setCart(cart.map(c => c.sku === sku ? { ...c, requestQty: finalQty } : c));
   };
 
   const removeFromCart = (sku: string) => {
@@ -107,10 +97,18 @@ export default function NewMaterialsRequest() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Safety check: Ensure no empty or zero quantities
+    if (cart.some(c => c.requestQty === "" || Number(c.requestQty) < 1)) {
+      alert("Please ensure all requested items have a valid quantity of at least 1.");
+      return;
+    }
+
     if (cart.length === 0 || !fromLocation || !toLocation || !date) {
       alert("Please complete all fields and add items.");
       return;
     }
+
     setIsSubmitting(true);
     
     // Safety check: Final clamp of values right before sending to database
@@ -238,17 +236,17 @@ export default function NewMaterialsRequest() {
                   </thead>
                   <tbody>
                     {availableInventory.map((item) => (
-                      <tr key={item.id} className="border-b last:border-0">
-                        <td className="p-2 font-medium">{item.materials?.description}</td>
-                        <td className="p-2 text-center font-mono">{item.quantity}</td>
+                      <tr key={item.sku} className="border-b last:border-0">
+                        <td className="p-2 font-medium">{item.name}</td>
+                        <td className="p-2 text-center font-mono">{item.available_quantity}</td>
                         <td className="p-2 text-right">
                           <button
                             type="button"
                             onClick={() => handleAddToCart(item)}
-                            disabled={cart.some(c => c.sku === item.SKU)}
+                            disabled={cart.some(c => c.sku === item.sku)}
                             className="text-xs bg-black text-white px-3 py-1 rounded font-bold disabled:bg-gray-300"
                           >
-                            {cart.some(c => c.sku === item.SKU) ? "Added" : "+ Add"}
+                            {cart.some(c => c.sku === item.sku) ? "Added" : "+ Add"}
                           </button>
                         </td>
                       </tr>
@@ -264,15 +262,20 @@ export default function NewMaterialsRequest() {
               <h3 className="text-xs font-bold text-slate-700 uppercase">Selected Items</h3>
               {cart.map((item) => (
                 <div key={item.sku} className="flex items-center gap-4 bg-gray-50 p-3 rounded-lg border border-gray-200">
-                  <div className="flex-1 font-bold text-sm">{item.description}</div>
+                  <div className="flex-1 font-bold text-sm">{item.name}</div>
                   <div className="flex items-center gap-2">
                     <input
                       type="number"
+                      min="1"
+                      max={item.maxQty}
                       value={item.requestQty}
-                      // Fire update during typing
-                      onChange={(e) => updateCartQty(item.sku, e.target.value)}
-                      // Fire clamp when user clicks outside the input
-                      onBlur={() => clampCartQty(item.sku, item.maxQty)}
+                      onChange={(e) => updateCartQty(item.sku, e.target.value, item.maxQty)}
+                      onBlur={() => {
+                        // Reset to 1 if user leaves the field completely empty or types 0
+                        if (item.requestQty === "" || Number(item.requestQty) < 1) {
+                          updateCartQty(item.sku, "1", item.maxQty);
+                        }
+                      }}
                       className="w-16 p-1 border border-gray-300 rounded text-center font-mono"
                     />
                     <span className="text-xs text-gray-500">/ {item.maxQty}</span>

@@ -4,9 +4,10 @@ import { useRouter } from 'next/navigation';
 import { logMaterialFulfillment } from './actions';
 
 interface Item {
-  id: string; 
+  sku: string; 
   name: string;
-  quantity: string;
+  quantity: string | number; 
+  maxQty: number; 
   specifications: string;
   maxQty: number; 
 }
@@ -16,7 +17,8 @@ export default function MaterialsForm() {
   
   // Header state
   const [requestId, setRequestId] = useState(''); 
-  const [dbId, setDbId] = useState(''); 
+  const [dbId, setDbId] = useState('');           
+  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   
   // NEW: Date state initialized empty to prevent hydration errors
   const [date, setDate] = useState('');         
@@ -33,27 +35,50 @@ export default function MaterialsForm() {
 
     // 2. LOAD SESSION DATA
     const savedData = sessionStorage.getItem('selectedRequestData');
+    const savedLocationId = sessionStorage.getItem('deliveryLocation');
     
     if (savedData) {
       try {
         const parsed = JSON.parse(savedData);
         
-        setRequestId(parsed.requestId || parsed.displayId || '');
-        setDbId(parsed.id || '');
+        // 1. FOOLPROOF ID EXTRACTION
+        const actualId = parsed?.rawRequest?.id || parsed?.id || '';
+        const displayId = parsed?.displayId || parsed?.rawRequest?.id || parsed?.id || '';
+        
+        setRequestId(displayId);
+        setDbId(actualId);
 
-        if (parsed.items && parsed.items.length > 0) {
-          const formattedItems = parsed.items.map((item: any) => {
-            const initialQty = parseInt(item.quantity?.toString() || '0');
-            return {
-              id: item.id.toString(),
-              name: item.name || '',
-              quantity: initialQty.toString(),
-              specifications: item.specifications || '',
-              maxQty: initialQty 
-            };
-          });
-          setItems(formattedItems);
+        // 2. FOOLPROOF ITEM EXTRACTION
+        // Hunts down the items array no matter what format was passed in session storage
+        let sourceItems = parsed?.rawRequest?.line_items || parsed?.line_items || parsed?.items || [];
+
+        // Filter by location
+        if (savedLocationId) {
+          sourceItems = sourceItems.filter((item: any) => item.to_id === savedLocationId);
         }
+
+        // 3. MAP TO FORM STATE
+        const formattedItems = sourceItems.map((item: any) => {
+          // Grab 'remaining'. If missing, fallback to 'quantity' or 'total'
+          let maxAllowed = 1;
+          if (item.remaining !== undefined && item.remaining !== null) {
+            maxAllowed = parseInt(item.remaining, 10);
+          } else if (item.quantity !== undefined && item.quantity !== null) {
+            maxAllowed = parseInt(item.quantity, 10);
+          } else if (item.total !== undefined && item.total !== null) {
+            maxAllowed = parseInt(item.total, 10);
+          }
+
+          return {
+            sku: item.sku || item.id, // Fallback for older data shapes
+            name: item.name || 'Unknown Material',
+            quantity: maxAllowed.toString(), // Default the box to the exact remaining amount
+            maxQty: maxAllowed,              // Hard-cap the box to the exact remaining amount
+            specifications: item.specifications || ''
+          };
+        });
+
+        setItems(formattedItems);
       } catch (error) {
         console.error("Failed to parse request data", error);
       }
@@ -62,22 +87,21 @@ export default function MaterialsForm() {
     }
   }, [router]);
 
-  const updateItemQty = (id: string, newQtyStr: string) => {
-    setItems(items.map(item => {
-      if (item.id === id) {
-        let val = parseInt(newQtyStr);
-        if (isNaN(val)) val = 0; 
-        if (val < 0) val = 0;
-        if (val > item.maxQty) val = item.maxQty;
-        
-        return { ...item, quantity: val.toString() };
-      }
-      return item;
-    }));
-  };
+  const updateItemQty = (sku: string, val: string, maxQty: number) => {
+    // Allow empty string while the user is actively typing
+    if (val === "") {
+      setItems(items.map(item => item.sku === sku ? { ...item, quantity: "" } : item));
+      return;
+    }
 
-  const handleRemoveItem = (id: string) => {
-    setItems(items.filter(item => item.id !== id));
+    let finalQty = parseInt(val, 10);
+    if (isNaN(finalQty)) return;
+    
+    // Hard caps
+    if (finalQty > maxQty) finalQty = maxQty;
+    if (finalQty < 0) finalQty = 0; // Prevent negatives
+
+    setItems(items.map(item => item.sku === sku ? { ...item, quantity: finalQty.toString() } : item));
   };
 
   const handleProceedToReview = (e: React.FormEvent) => {
@@ -93,15 +117,20 @@ export default function MaterialsForm() {
   const handleFinalSubmit = async () => {
     setIsSubmitting(true);
     
+    // Only submit items where the quantity being received is greater than 0
+    const itemsToSubmit = items
+      .filter(item => parseInt(item.quantity.toString()) > 0)
+      .map(item => ({
+        sku: item.sku, 
+        name: item.name,
+        quantity: parseInt(item.quantity.toString()) || 0, 
+        specifications: item.specifications
+      }));
+
     const result = await logMaterialFulfillment({
       dbId,
-      // You can pass the `date` here if you update your actions.ts to log it!
-      items: items.map(item => ({
-        id: item.id, 
-        name: item.name,
-        quantity: parseInt(item.quantity),
-        specifications: item.specifications
-      }))
+      date, // PASSING THE DATE TO THE BACKEND
+      items: itemsToSubmit
     });
 
     if (result.success) {
@@ -113,6 +142,9 @@ export default function MaterialsForm() {
       setIsSubmitting(false);
     }
   };
+
+  // Prevent submission if all items are set to 0
+  const validItemsCount = items.filter(item => parseInt(item.quantity.toString()) > 0).length;
 
   return (
     <div className="min-h-screen p-8 text-black bg-white">
@@ -138,9 +170,10 @@ export default function MaterialsForm() {
 
         {!isReviewMode && (
           <form onSubmit={handleProceedToReview} className="space-y-8">
-            
-            {/* Added a grid to put Request ID and Date side-by-side on larger screens */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+            {/* HEADER GRID (ID & DATE) */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              
               <div className="bg-gray-50 p-6 rounded-xl border border-gray-200">
                 <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">
                   Request Reference
@@ -149,9 +182,24 @@ export default function MaterialsForm() {
                   type="text"
                   value={requestId}
                   readOnly
-                  className="w-full p-4 border border-gray-200 rounded-lg bg-gray-100 text-gray-500 cursor-not-allowed font-mono font-bold"
+                  className="w-full p-4 border border-gray-200 rounded-lg bg-gray-100 text-gray-500 cursor-not-allowed font-mono font-bold uppercase"
                 />
               </div>
+
+              <div className="bg-gray-50 p-6 rounded-xl border border-gray-200">
+                <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">
+                  Fulfillment Date *
+                </label>
+                <input
+                  type="date"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  required
+                  className="w-full p-4 border border-gray-300 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-blue-500 font-bold transition"
+                />
+              </div>
+
+            </div>
 
               {/* NEW: Date Input */}
               <div className="bg-gray-50 p-6 rounded-xl border border-gray-200">
@@ -169,79 +217,78 @@ export default function MaterialsForm() {
             </div>
 
             <div className="bg-gray-50 p-6 rounded-xl border border-gray-200">
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-xl font-bold">Items Received</h2>
-              </div>
+              <h2 className="text-xl font-bold mb-4">Items Expected</h2>
 
-              {items.length === 0 ? (
-                 <p className="text-red-500 italic font-medium p-4 border border-red-200 bg-red-50 rounded-lg">
-                   All items removed. You must reload or select a request to fulfill items.
-                 </p>
-              ) : (
-                <div className="space-y-6">
-                  {items.map((item) => (
-                    <div key={item.id} className="p-5 bg-white border border-gray-200 rounded-lg shadow-sm">
+              <div className="space-y-6">
+                {items.length === 0 ? (
+                  <p className="text-gray-500 italic p-4 text-center border-2 border-dashed rounded-lg">No items found for this location.</p>
+                ) : (
+                  items.map((item) => (
+                    <div key={item.sku} className="p-5 bg-white border border-gray-200 rounded-lg shadow-sm">
                       <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
                         
+                        {/* Name - Read Only */}
                         <div className="md:col-span-5">
                           <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Material Name</label>
                           <p className="font-bold text-gray-900 truncate">{item.name}</p>
-                          {item.specifications && (
-                            <p className="text-xs text-gray-400 italic mt-1">{item.specifications}</p>
+                          {item.maxQty === 0 && (
+                            <span className="text-xs font-bold text-green-600 uppercase">Fully Received</span>
                           )}
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveItem(item.id)}
-                            className="mt-3 text-[11px] font-black tracking-wider text-red-500 hover:text-red-700 hover:underline uppercase transition flex items-center gap-1"
-                          >
-                            <span className="text-sm leading-none">×</span> Remove Item
-                          </button>
                         </div>
 
+                        {/* Quantity - Editable */}
                         <div className="md:col-span-7 flex items-center justify-end gap-4">
-                          <div className="flex flex-col items-end">
-                            <label className="text-[10px] font-black text-gray-400 uppercase mb-1">Received Qty</label>
-                            <div className="flex items-center border border-gray-300 rounded-lg overflow-hidden bg-white w-40">
-                              <button
-                                type="button"
-                                onClick={() => updateItemQty(item.id, ((parseInt(item.quantity) || 0) - 1).toString())}
-                                className="px-4 py-3 bg-gray-50 hover:bg-gray-200 border-r border-gray-300 font-bold transition"
-                              >
-                                −
-                              </button>
-                              <input
-                                type="number"
-                                value={item.quantity}
-                                onChange={(e) => updateItemQty(item.id, e.target.value)}
-                                onFocus={(e) => e.target.select()}
-                                className="w-full p-2 text-center focus:outline-none font-bold text-lg"
-                              />
-                              <button
-                                type="button"
-                                onClick={() => updateItemQty(item.id, ((parseInt(item.quantity) || 0) + 1).toString())}
-                                className="px-4 py-3 bg-gray-50 hover:bg-gray-200 border-l border-gray-300 font-bold transition"
-                              >
-                                +
-                              </button>
-                            </div>
-                            <span className="text-[10px] text-gray-400 mt-1 font-bold tracking-wide">
-                              MAX: {item.maxQty}
-                            </span>
+                          <label className="text-[10px] font-black text-gray-400 uppercase">Receiving Now</label>
+                          <div className="flex items-center border border-gray-300 rounded-lg overflow-hidden bg-white w-40">
+                            <button
+                              type="button"
+                              onClick={() => updateItemQty(item.sku, Math.max(0, (parseInt(item.quantity.toString()) || 0) - 1).toString(), item.maxQty)}
+                              className="px-4 py-3 bg-gray-50 hover:bg-gray-200 border-r border-gray-300 font-bold transition disabled:opacity-50"
+                              disabled={item.maxQty === 0}
+                            >
+                              −
+                            </button>
+                            <input
+                              type="number"
+                              min="0"
+                              max={item.maxQty}
+                              value={item.quantity}
+                              disabled={item.maxQty === 0}
+                              onChange={(e) => updateItemQty(item.sku, e.target.value, item.maxQty)}
+                              onBlur={(e) => {
+                                const val = parseInt(e.target.value);
+                                // If they completely empty the box, auto-correct it to the max amount
+                                if (isNaN(val)) {
+                                  updateItemQty(item.sku, item.maxQty.toString(), item.maxQty);
+                                } else if (val < 0) {
+                                  updateItemQty(item.sku, "0", item.maxQty);
+                                }
+                              }}
+                              className="w-full p-2 text-center focus:outline-none font-bold text-lg disabled:bg-gray-100 disabled:text-gray-400"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => updateItemQty(item.sku, Math.min(item.maxQty, (parseInt(item.quantity.toString()) || 0) + 1).toString(), item.maxQty)}
+                              className="px-4 py-3 bg-gray-50 hover:bg-gray-200 border-l border-gray-300 font-bold transition disabled:opacity-50"
+                              disabled={item.maxQty === 0}
+                            >
+                              +
+                            </button>
                           </div>
                         </div>
                       </div>
                     </div>
-                  ))}
-                </div>
-              )}
+                  ))
+                )}
+              </div>
             </div>
 
             <button
               type="submit"
-              disabled={items.length === 0}
-              className="w-full bg-blue-600 text-white font-bold text-lg py-5 rounded-xl hover:bg-blue-700 active:scale-[0.98] transition shadow-lg disabled:bg-gray-400 disabled:cursor-not-allowed"
+              disabled={validItemsCount === 0}
+              className="w-full bg-blue-600 text-white font-bold text-lg py-5 rounded-xl hover:bg-blue-700 active:scale-[0.98] transition shadow-lg disabled:bg-gray-300 disabled:cursor-not-allowed"
             >
-              Review Request Fulfillment Details
+              {validItemsCount === 0 ? "No items to fulfill" : "Review Request Fulfillment Details"}
             </button>
           </form>
         )}
@@ -252,12 +299,11 @@ export default function MaterialsForm() {
               <div className="bg-gray-50 p-6 border-b border-gray-200 flex justify-between items-center">
                 <div>
                   <p className="text-sm text-gray-500 font-bold uppercase tracking-wider mb-1">Request ID</p>
-                  <p className="text-2xl font-bold text-gray-900">{requestId}</p>
+                  <p className="text-2xl font-bold text-gray-900 truncate uppercase">{requestId}</p>
                 </div>
-                {/* Review mode Date display */}
                 <div className="text-right">
                   <p className="text-sm text-gray-500 font-bold uppercase tracking-wider mb-1">Date</p>
-                  <p className="text-xl font-medium text-gray-900">{date}</p>
+                  <p className="text-lg font-bold text-gray-900">{date}</p>
                 </div>
               </div>
               
@@ -265,14 +311,15 @@ export default function MaterialsForm() {
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="bg-white border-b border-gray-100 text-xs uppercase tracking-wider text-gray-400">
-                      <th className="p-4 font-bold">Qty</th>
+                      <th className="p-4 font-bold">Qty Received</th>
                       <th className="p-4 font-bold">Item Name</th>
                       <th className="p-4 font-bold">Specifications</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {items.map((item, index) => (
-                      <tr key={index} className="border-b border-gray-50 last:border-0 hover:bg-gray-50 transition">
+                    {/* Only show items they are actually receiving right now */}
+                    {items.filter(item => parseInt(item.quantity.toString()) > 0).map((item) => (
+                      <tr key={item.sku} className="border-b border-gray-50 last:border-0 hover:bg-gray-50 transition">
                         <td className="p-4 font-bold text-gray-900">{item.quantity}</td>
                         <td className="p-4 font-medium text-gray-800">{item.name}</td>
                         <td className="p-4 text-gray-500 text-sm">{item.specifications || "—"}</td>

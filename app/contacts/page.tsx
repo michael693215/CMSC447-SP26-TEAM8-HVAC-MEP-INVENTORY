@@ -2,26 +2,37 @@
 
 import { useState, useEffect } from 'react';
 import { DataTable } from '@/components/ui/DataTable'
-import { Employee, employeeColumns } from '@/components/tables/employees/columns'
+import { Employee, employeeColumns } from '@/components/columns/Employee'
 import Link from 'next/link';
 import { useRouter } from 'next/navigation'
 import { getUserRole } from '@/lib/actions'
 import { Role } from '@/lib/types'
+import { getEmployees } from './actions'
 
 export default function ContactsPage() {
   const router = useRouter();
   const [role, setRole] = useState<Role>('unassigned');
+  const [data, setData] = useState<Employee[] | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
 
   useEffect(() => {
     async function getRole() {
-      const data = await getUserRole();
-      setRole(data);
+      const permissions = await getUserRole();
+      const data = await getEmployees();
+      setData(data);
+      setRole(permissions);
       setIsLoading(false);
     }
     getRole();
   }, [])
+
+  useEffect(() => {
+      if (!isLoading && !data)
+      {
+          router.back();
+      }
+  }, [isLoading, data, router]);
 
   if (isLoading) 
   {
@@ -29,12 +40,12 @@ export default function ContactsPage() {
       <div className="flex justify-center min-h-screen items-center">Loading columns...</div>
     )
   }
-
-  const allContacts : Employee[] = [
-    { id: "1", first_name: "John", last_name: "Miller", email: "john@millerhvac.com", role: "administrator", is_active: true },
-    { id: "2", first_name: "Sarah", last_name: "Cheng", email: "schen@citypm.org", role: "foreman", is_active: true },
-    { id: "3", first_name: "Robert", last_name: "Davis", email: "orders@davisparts.com", role: "logistician", is_active: false },
-  ];
+  if (!data)
+  {
+    return (
+      <div className="flex justify-center min-h-screen items-center">Failed to load columns. Redirecting...</div>
+    )
+  }
 
   return (
     <div className="max-w-6xl mx-auto">
@@ -69,7 +80,7 @@ export default function ContactsPage() {
 
       {/* Table Section */}
       <div className="bg-white shadow-md rounded-b-lg overflow-hidden border border-gray-200">
-        <DataTable columns={ employeeColumns } data={ allContacts } role={ role } /> 
+        <DataTable columns={ employeeColumns } data={ data } role={ role } /> 
       </div>
     </div>
   );
