@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { getPendingMaterialRequests } from './actions';
-import { getLocations } from '../materials-requests/actions';
+import { getLocations } from '@/lib/actions';
 
 // Import your Builder and Blueprint!
 import { DataTable } from "@/components/ui/DataTable";

@@ -4,9 +4,9 @@ import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { DataTable } from "@/components/ui/DataTable";
-import { LocationMaterial } from "@/components/columns/LocationMaterials";
-import { locationMaterialsColumns } from "@/components/columns/LocationMaterials";
-import { getInventoryByLocation, getUserRole } from "@/lib/actions";
+import { Fulfillment } from "@/components/columns/DeliveryHistory";
+import { deliveryHistoryColumns } from "@/components/columns/DeliveryHistory";
+import { getDeliveryHistory, getUserRole } from "@/lib/actions";
 import { Role } from "@/lib/types";
 import { useRouter } from "next/navigation";
 
@@ -22,7 +22,7 @@ export default function InventoryPage() {
   useEffect(() => {
     async function loadData() {
       const userRole = await getUserRole();
-      const data = await getInventoryByLocation(locationId);
+      const data = await getDeliveryHistory(locationId);
       setProducts(data);
       setRole(userRole);
       setIsLoading(false);
@@ -34,19 +34,17 @@ export default function InventoryPage() {
   {
       return (<div className="flex justify-center min-h-screen items-center">Loading data...</div>);
   }
+    if (!products || products.length === 0) {
+        return (
+            <div className="max-w-6xl mx-auto">
+                <button onClick={() => router.back() } className="text-blue-600 hover:underline mb-4 inline-block font-medium">
+                    &larr; Back to Locations
+                </button>
 
-  if (!products || products.length === 0) {
-      return (
-          <div className="max-w-6xl mx-auto">
-              <button onClick={() => router.back() } className="text-blue-600 hover:underline mb-4 inline-block font-medium">
-                  &larr; Back to Locations
-              </button>
-
-              <div className="flex justify-center min-h-screen items-center">No delivery history found for this ID.</div>
-          </div>
-      );
-  }
-
+                <div className="flex justify-center min-h-screen items-center">No delivery history found for this ID.</div>
+            </div>
+        );
+    }
 
   return (
     <div className="min-h-screen p-4 sm:p-8 text-black">
@@ -56,7 +54,7 @@ export default function InventoryPage() {
         </button>
 
         <div className="flex flex-wrap justify-between items-center gap-3 mb-6">
-          <h1 className="text-2xl sm:text-3xl font-bold uppercase tracking-tight">Inventory for { products[0].location_name }</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold uppercase tracking-tight">Delivery history for { products[0].location_name }</h1>
         </div>
 
         {/* Search + filters */}
@@ -77,7 +75,7 @@ export default function InventoryPage() {
 
         {/* Table */}
         <div className="bg-white shadow-md rounded-b-lg overflow-hidden border border-gray-200">
-          <DataTable columns={ locationMaterialsColumns } data={ products } role={ role } /> 
+          <DataTable columns={ deliveryHistoryColumns } data={ products } role={ role } /> 
         </div>
       </div>
     </div>

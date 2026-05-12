@@ -216,6 +216,123 @@ export async function getMaterialRequestById(id: string) {
   };
 }
 
+export async function getDeliveryById(id : string) {
+  const supabase = await createClient();
+
+  // 1. Fetch the Fulfillment Header (Fetching po_number and request_id here)
+  const { data: fulfillment, error: fulError } = await supabase
+    .from("fulfillment")
+    .select(`
+      *,
+      po_number,     
+      request_id,    
+      logistician:logistician_id (
+        first_name,
+        last_name
+      ),
+      location:location_id (
+        name
+      )
+    `)
+    .eq("id", id)
+    .single();
+
+  if (fulError || !fulfillment) return null;
+
+  // 2. Format Header Info
+  const logiData = Array.isArray(fulfillment.logistician) ? fulfillment.logistician : fulfillment.logistician;
+  
+  // 3. Logic to determine the "Source Document"
+  const sourceDocument = fulfillment.po_number 
+    ? `PO: ${fulfillment.po_number}` 
+    : `${fulfillment.request_id}`;
+
+  // 4. Fetch Line Items
+  const { data: lineItems, error: linesError } = await supabase
+    .from("fulfillment_materials")
+    .select(`
+      id,
+      quantity,
+      po_item:po_materials_id ( sku ),
+      mr_item:materials_request_materials_id ( sku )
+    `)
+    .eq("fulfillment_id", id);
+
+  // ... (Material mapping logic with the index as discussed) ...
+  const rawItems = (lineItems || []).map(item => {
+    const poItem = Array.isArray(item.po_item) ? item.po_item[0] : item.po_item;
+    const mrItem = Array.isArray(item.mr_item) ? item.mr_item[0] : item.mr_item;
+    return { ...item, sku: poItem?.sku || mrItem?.sku };
+  });
+    // 2. We fetch the actual Material details (Name, Desc) using those SKUs
+    const skus = Array.from(new Set(rawItems.map(i => i.sku).filter(Boolean)));
+    const materialsMap = new Map();
+    if (skus.length > 0) {
+    const { data: mats } = await supabase.from("materials").select("sku, name, description").in("sku", skus);
+    mats?.forEach(m => materialsMap.set(m.sku, m));
+    }
+
+    // 3. THIS is where formattedItems is born
+    const formattedItems = rawItems.map((item, index) => {
+    const material = materialsMap.get(item.sku) || {};
+    return {
+        line_number: index + 1,
+        id: item.id,
+        quantity: item.quantity,
+        sku: item.sku || "N/A",
+        name: material.name || "Unknown Material",
+        description: material.description || ""
+    };
+    });
+  // (Final format)
+  return {
+    ...fulfillment,
+    logistician_name: `${logiData?.first_name || ''} ${logiData?.last_name || ''}`.trim(),
+    location_name: fulfillment.location?.name || "Unknown",
+    source_label: sourceDocument, // Helpful for the UI header
+    items: formattedItems // The list of materials we built
+  };
+}
+
+export async function getDeliveryHistory(id : string) {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("fulfillment")
+    .select(`
+      id,
+      datetime, 
+      po_number,
+      request_id,
+      employee (
+        first_name,
+        last_name
+      ),
+      location (
+        name
+      )
+    `)
+    .eq("location_id", id)
+    .order("datetime", { ascending: true });
+
+  if (error) {
+    console.error("Error fetching delivery history:", error.message);
+    return [];
+  }
+
+  // Flatten the response so it matches your Fulfillment type exactly
+  return data.map((f: any) => ({
+    id: f.id,
+    location_name: f.location.name,
+    date: f.datetime, // This is the string from Supabase
+    po_number: f.po_number,
+    request_id: f.request_id,
+    // Unpacking the joined profile data
+    first_name: f.employee?.first_name || "System",
+    last_name: f.employee?.last_name || "User",
+  }));
+}
+
 export async function createMaterialRequest(formData: any) {
   const supabase = await createClient();
 

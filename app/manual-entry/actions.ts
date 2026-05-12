@@ -27,7 +27,8 @@ export async function logDeliverySubmission(payload: any) {
         datetime: new Date(payload.date).toISOString(),
         po_number: payload.poNumber,
         ocr_json: payload.ocrJson || null,
-        logistician_id: user.id
+        logistician_id: user.id,
+        location_id: payload.locationId
       })
       .select("id") // Immediately grab the newly generated ID
       .single();

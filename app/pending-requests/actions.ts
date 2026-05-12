@@ -61,7 +61,7 @@ export async function getPendingMaterialRequests() {
 }
 
 // 2. The fulfillment action (Unchanged)
-export async function logMaterialFulfillment(formData: any) {
+export async function logMaterialFulfillment(formData: any, location_id : string) {
   const supabase = await createClient();
 
   // Save the fulfillment record
