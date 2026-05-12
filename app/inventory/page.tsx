@@ -58,7 +58,7 @@ export default function InventoryPage() {
     const matchesSearch =
       item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       item.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.sku.toLowerCase().includes(searchTerm.toLowerCase()); // Added SKU search!
+      item.sku.toLowerCase().includes(searchTerm.toLowerCase());
       
     const matchesCategory = categoryFilter === "All" || item.category === categoryFilter;
     const matchesStatus = statusFilter === "All" || item.status === statusFilter;
@@ -77,7 +77,11 @@ export default function InventoryPage() {
   function Th({ col, label, center, sticky }: { col: SortKey; label: string; center?: boolean; sticky?: boolean }) {
     return (
       <th
-        className={`p-3 sm:p-4 border-b cursor-pointer select-none whitespace-nowrap ${center ? "text-center" : ""} ${sticky ? "sticky left-0 z-20 bg-blue-200 hover:bg-blue-300" : "hover:bg-black/5"}`}
+        className={`p-3 sm:p-4 border-b cursor-pointer select-none whitespace-nowrap ${center ? "text-center" : ""} ${
+          sticky 
+            ? "static sm:sticky sm:left-0 sm:z-20 bg-blue-200 hover:bg-blue-300 sm:shadow-[1px_0_0_#e5e7eb]" 
+            : "hover:bg-black/5"
+        }`}
         onClick={() => toggleSort(col)}
       >
         {label}
@@ -161,8 +165,13 @@ export default function InventoryPage() {
               ) : sorted.length > 0 ? (
                 sorted.map((item) => (
                   <tr key={item.id} className="hover:bg-blue-50 transition-colors border-b border-gray-100 cursor-pointer">
-                    <td className="p-3 sm:p-4 border-b border-gray-100 font-bold whitespace-nowrap sticky left-0 z-10 bg-white shadow-[1px_0_0_#e5e7eb]">
-                      <Link href={`/inventory/${item.id}`} className="hover:underline text-black block">
+                    <td className="p-3 sm:p-4 border-b border-gray-100 font-bold whitespace-nowrap static sm:sticky sm:left-0 sm:z-10 bg-white sm:shadow-[1px_0_0_#e5e7eb]">
+                      <Link 
+                        href={`/inventory/${item.id}`} 
+                        // UPDATED: Expanded the max-widths to allow longer names before truncation!
+                        className="hover:underline text-black block truncate max-w-[180px] sm:max-w-[260px] lg:max-w-[350px]"
+                        title={item.name} 
+                      >
                         {item.name}
                       </Link>
                     </td>

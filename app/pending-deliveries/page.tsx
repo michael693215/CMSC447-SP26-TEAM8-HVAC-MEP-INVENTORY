@@ -1,70 +1,59 @@
-// File: app/pending-deliveries/page.tsx
 "use client";
+
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-
-const FAKE_DELIVERIES = [
-  {
-    id: 1,
-    location: "Location 1",
-    poNumber: "PO-550192",
-    items: [
-      { id: 101, name: "Galvanized Steel Pipes", quantity: "150", specifications: "2-inch diameter, 10ft length" },
-      { id: 102, name: "Pipe Fittings", quantity: "300", specifications: "Elbow, 90 degree" }
-    ]
-  },
-  {
-    id: 2,
-    location: "Location 1",
-    poNumber: "PO-550198",
-    items: [
-      { id: 103, name: "Drywall Sheets", quantity: "80", specifications: "1/2 inch thick, 4x8" }
-    ]
-  },
-  {
-    id: 3,
-    location: "Location 2",
-    poNumber: "PO-772004",
-    items: [
-      { id: 104, name: "Roofing Shingles", quantity: "50", specifications: "Asphalt, Architectural, Weathered Wood" },
-      { id: 105, name: "Roofing Nails", quantity: "10000", specifications: "1-1/4 inch, Galvanized" },
-      { id: 106, name: "Underlayment", quantity: "10", specifications: "Synthetic, 1000 sq ft roll" }
-    ]
-  }
-];
+import { DataTable } from '@/components/ui/DataTable';
+import { getPendingDeliveryColumns, PendingDeliveryItem } from '@/components/columns/PendingDelivery';
+import { getPendingDeliveries, getLocationName } from './actions';
 
 export default function PendingDeliveries() {
   const router = useRouter();
-  const [currentLocation, setCurrentLocation] = useState('Location 1');
-  const [locationDeliveries, setLocationDeliveries] = useState(FAKE_DELIVERIES);
+  
+  const [currentLocationName, setCurrentLocationName] = useState('Loading...');
+  const [locationDeliveries, setLocationDeliveries] = useState<PendingDeliveryItem[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
 
+  // Load the selected location and its deliveries on mount
   useEffect(() => {
-    const savedLocation = sessionStorage.getItem('deliveryLocation');
-    if (savedLocation) {
-      setCurrentLocation(savedLocation);
-      // Save ONLY the deliveries for this location as our base list
-      setLocationDeliveries(FAKE_DELIVERIES.filter(d => d.location === savedLocation));
+    async function loadData() {
+      const savedLocationId = sessionStorage.getItem('deliveryLocation');
+      
+      if (!savedLocationId) {
+        // If they skipped the hub somehow, send them back
+        router.push('/log-delivery');
+        return;
+      }
+
+      // Fetch the human-readable name and the actual deliveries
+      const [locName, deliveries] = await Promise.all([
+        getLocationName(savedLocationId),
+        getPendingDeliveries(savedLocationId)
+      ]);
+
+      setCurrentLocationName(locName);
+      setLocationDeliveries(deliveries);
+      setIsLoading(false);
     }
-  }, []);
+    
+    loadData();
+  }, [router]);
 
   const handleSelectDelivery = (delivery: any) => {
     sessionStorage.setItem('selectedDeliveryData', JSON.stringify(delivery));
     router.push('/manual-entry'); 
   };
 
-  // --- NEW: Dynamic Search Filtering ---
+  // --- Dynamic Search Filtering ---
   const displayedDeliveries = locationDeliveries.filter((delivery) => {
-    if (!searchQuery) return true; // If search is empty, show all
+    if (!searchQuery) return true;
 
     const query = searchQuery.toLowerCase();
 
-    // 1. Check if the PO matches
-    if (delivery.poNumber.toLowerCase().includes(query)) {
+    if (delivery.po_number.toLowerCase().includes(query)) {
       return true;
     }
 
-    // 2. Check if ANY item name or specification matches
     const hasMatchingItem = delivery.items.some(item => 
       item.name.toLowerCase().includes(query) || 
       item.specifications.toLowerCase().includes(query)
@@ -81,17 +70,17 @@ export default function PendingDeliveries() {
           onClick={() => router.back()} 
           className="text-blue-600 hover:underline mb-6 inline-block font-medium"
         >
-          ← Back to Scanner
+          &larr; Back to Scanner
         </button>
 
         <header className="mb-8">
           <h1 className="text-3xl font-bold uppercase tracking-tight">Pending Deliveries</h1>
           <p className="text-gray-500 mt-2 text-lg">
-            Expected deliveries for <span className="font-bold text-blue-600">{currentLocation}</span>
+            Expected deliveries for <span className="font-bold text-blue-600">{currentLocationName}</span>
           </p>
         </header>
 
-        {/* --- NEW: Search Bar UI --- */}
+        {/* --- Search Bar UI --- */}
         <div className="mb-6 relative">
           <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
             <svg className="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
@@ -107,58 +96,22 @@ export default function PendingDeliveries() {
           />
         </div>
 
+        {/* --- Builder Table Integration --- */}
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-gray-100 border-b border-gray-200 text-sm uppercase tracking-wider text-gray-600">
-                <th className="p-4 font-bold">PO Number</th>
-                <th className="p-4 font-bold">Items Expected</th>
-                <th className="p-4 font-bold text-right">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {displayedDeliveries.map((delivery) => (
-                <tr 
-                  key={delivery.id} 
-                  onClick={() => handleSelectDelivery(delivery)}
-                  className="border-b border-gray-100 hover:bg-blue-50 cursor-pointer transition"
-                >
-                  <td className="p-4 font-bold text-gray-900">{delivery.poNumber}</td>
-                  <td className="p-4">
-                    <ul className="text-sm text-gray-600 list-disc list-inside">
-                      {delivery.items.map((item: any) => (
-                        <li key={item.id}>
-                          <span className="font-semibold text-gray-800">{item.quantity}x</span> {item.name} <span className="text-gray-400">({item.specifications})</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </td>
-                  <td className="p-4 text-right">
-                    <button className="bg-blue-100 text-blue-700 px-4 py-2 rounded-lg font-semibold hover:bg-blue-200 transition active:scale-95">
-                      Select →
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              
-              {/* Empty States */}
-              {locationDeliveries.length === 0 && (
-                <tr>
-                  <td colSpan={3} className="p-8 text-center text-gray-500 italic">
-                    No pending deliveries found for this location.
-                  </td>
-                </tr>
-              )}
-              {locationDeliveries.length > 0 && displayedDeliveries.length === 0 && (
-                <tr>
-                  <td colSpan={3} className="p-8 text-center text-gray-500 italic">
-                    No results found for &quot;<span className="font-semibold">{searchQuery}</span>&quot;
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+          {isLoading ? (
+            <div className="p-10 text-center text-gray-500 font-medium">Loading expected deliveries...</div>
+          ) : (
+            <DataTable 
+              columns={getPendingDeliveryColumns(handleSelectDelivery)} 
+              data={displayedDeliveries} 
+              // Passing a default role just so the action buttons display properly
+              role={"project_manager" as any} 
+              // Matches our column action handler structure perfectly
+              onRowClick={(row) => handleSelectDelivery(row.rawRequest)}
+            />
+          )}
         </div>
+
       </div>
     </div>
   );

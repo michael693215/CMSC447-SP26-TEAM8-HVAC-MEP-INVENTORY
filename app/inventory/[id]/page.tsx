@@ -3,14 +3,17 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { getProductDetailBySku } from "../actions";
-
-type PurchaseOrderStatus = "Received" | "In Transit" | "Pending";
+import { getProductDetailBySku } from "./actions"; 
 
 const PO_STATUS_STYLES: Record<string, string> = {
   "Received": "bg-green-100 text-green-700",
+  "received": "bg-green-100 text-green-700",
+  "Completed": "bg-green-100 text-green-700",
+  "completed": "bg-green-100 text-green-700",
   "In Transit": "bg-blue-100 text-blue-700",
+  "in transit": "bg-blue-100 text-blue-700",
   "Pending": "bg-yellow-100 text-yellow-700",
+  "pending": "bg-yellow-100 text-yellow-700",
 };
 
 export default function ProductDetailPage() {
@@ -19,10 +22,11 @@ export default function ProductDetailPage() {
   
   const [product, setProduct] = useState<any>(null);
   const [allPOs, setAllPOs] = useState<any[]>([]);
-  const [locations, setLocations] = useState<any[]>([]); // New state for locations
+  const [locations, setLocations] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  const [statusFilter, setStatusFilter] = useState<PurchaseOrderStatus | "All">("All");
+  // Defaulting to "All"
+  const [statusFilter, setStatusFilter] = useState<string>("All");
 
   useEffect(() => {
     async function loadDetail() {
@@ -30,7 +34,7 @@ export default function ProductDetailPage() {
       if (data) {
         setProduct(data.product);
         setAllPOs(data.allPOs);
-        setLocations(data.locations); // Saving locations to state
+        setLocations(data.locations);
       }
       setIsLoading(false);
     }
@@ -57,8 +61,10 @@ export default function ProductDetailPage() {
   }
 
   const inStock = product.qty;
+  
+  // Calculate how many are actively on their way (ignoring completed/received ones)
   const receiving = allPOs
-    .filter((po) => po.status === "Pending" || po.status === "In Transit")
+    .filter((po) => po.status.toLowerCase() === "pending" || po.status.toLowerCase() === "in transit")
     .reduce((sum, po) => {
       const item = po.items.find((i: any) => i.productId === sku);
       return sum + (item?.qty ?? 0);
@@ -66,9 +72,10 @@ export default function ProductDetailPage() {
     
   const total = inStock + receiving;
 
+  // Case-insensitive filtering for the table
   const filteredPOs = statusFilter === "All"
     ? allPOs
-    : allPOs.filter((po) => po.status === statusFilter);
+    : allPOs.filter((po) => po.status.toLowerCase() === statusFilter.toLowerCase());
 
   return (
     <div className="min-h-screen p-4 sm:p-8 text-black">
@@ -116,7 +123,7 @@ export default function ProductDetailPage() {
           </div>
         </div>
 
-        {/* NEW: Stock Locations List */}
+        {/* Stock Locations List */}
         <div className="mb-8">
           <h2 className="text-lg sm:text-xl font-bold uppercase tracking-tight mb-4">Stock Locations</h2>
           {locations.length > 0 ? (
@@ -152,13 +159,13 @@ export default function ProductDetailPage() {
             <label className="text-xs font-bold uppercase tracking-wider text-gray-500">Status</label>
             <select
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as PurchaseOrderStatus | "All")}
+              onChange={(e) => setStatusFilter(e.target.value)}
               className="input-themed text-sm px-2 py-1.5 border border-gray-300 rounded-md"
             >
               <option value="All">All</option>
-              <option value="Pending">Pending</option>
-              <option value="In Transit">In Transit</option>
-              <option value="Received">Received</option>
+              <option value="pending">Pending</option>
+              <option value="in transit">In Transit</option>
+              <option value="completed">Completed</option>
             </select>
           </div>
         </div>
@@ -181,9 +188,10 @@ export default function ProductDetailPage() {
                   return (
                   <tr key={po.id} className="hover:bg-blue-50 transition-colors border-b border-gray-100">
                     <td className="p-3 sm:p-4 font-mono font-bold text-sm sticky left-0 z-10 bg-white shadow-[1px_0_0_#e5e7eb]">
-                      <Link href={`/purchase-orders/${po.id}`} className="hover:underline text-blue-700">{po.id}</Link>
+                      {/* FIXED: Changed text-blue-700 to text-black here */}
+                      <Link href={`/purchase-orders/${po.id}`} className="hover:underline text-black">{po.id}</Link>
                     </td>
-                    <td className="p-3 sm:p-4 text-sm whitespace-nowrap">{po.date}</td>
+                    <td className="p-3 sm:p-4 text-sm whitespace-nowrap">{po.date || "—"}</td>
                     <td className="p-3 sm:p-4 text-sm text-gray-700">{po.location}</td>
                     <td className="p-3 sm:p-4 text-center font-mono text-lg font-bold">{itemQty}</td>
                     <td className="p-3 sm:p-4 text-center">

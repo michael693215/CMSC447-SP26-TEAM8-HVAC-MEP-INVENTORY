@@ -1,26 +1,29 @@
-// File: app/manual-entry/page.tsx
 "use client";
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { logDeliverySubmission } from './actions';
 
 interface Item {
   id: number;
+  sku?: string; // NEW: Hidden tracker for precision DB matching
   name: string;
   quantity: string;
   specifications: string;
+  maxAllowed?: number; 
 }
 
 export default function ManualEntry() {
   const router = useRouter();
+  
   const [poNumber, setPoNumber] = useState('');
+  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [items, setItems] = useState<Item[]>([
     { id: Date.now(), name: '', quantity: '', specifications: '' }
   ]);
   
   const [isReviewMode, setIsReviewMode] = useState(false);
-  
-  // NEW: State to track where the user came from
   const [isFromPending, setIsFromPending] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     const scannedData = sessionStorage.getItem('scannedSlipData');
@@ -28,32 +31,42 @@ export default function ManualEntry() {
     
     if (scannedData) {
       try {
-        setIsFromPending(false); // Editable mode
+        setIsFromPending(false); 
         const parsedData = JSON.parse(scannedData);
         if (parsedData.PO) setPoNumber(parsedData.PO);
         if (parsedData.lineItems && parsedData.lineItems.length > 0) {
           const formattedItems = parsedData.lineItems.map((item: any, index: number) => ({
-            id: Date.now() + index,
+            id: Date.now() + index, 
+            sku: item.sku || '',
             name: item.description || '',
             quantity: item.quantityShipped?.toString() || '',
             specifications: item.specifications || ''
           }));
           setItems(formattedItems);
         }
-        sessionStorage.removeItem('scannedSlipData'); 
       } catch (error) {
         console.error("Failed to parse scanned data", error);
       }
     } 
     else if (tableData) {
       try {
-        setIsFromPending(true); // Locked mode
+        setIsFromPending(true); 
         const parsedData = JSON.parse(tableData);
         if (parsedData.poNumber) setPoNumber(parsedData.poNumber);
         if (parsedData.items && parsedData.items.length > 0) {
-          setItems(parsedData.items);
+          const decoupledItems = parsedData.items.map((item: any, index: number) => {
+            const rawMax = parseInt(item.quantity) || 0;
+            return {
+              id: Date.now() + index,
+              sku: item.sku || '',
+              name: item.name || '',
+              quantity: rawMax.toString(),
+              specifications: item.specifications || '',
+              maxAllowed: rawMax 
+            };
+          });
+          setItems(decoupledItems);
         }
-        sessionStorage.removeItem('selectedDeliveryData'); 
       } catch (error) {
          console.error("Failed to parse table data", error);
       }
@@ -71,7 +84,22 @@ export default function ManualEntry() {
   };
 
   const updateItem = (id: number, field: keyof Item, value: string) => {
-    setItems(items.map(item => item.id === id ? { ...item, [field]: value } : item));
+    setItems(items.map(item => {
+      if (item.id === id) {
+        if (field === 'quantity') {
+          if (value === '') return { ...item, quantity: '' };
+          let parsedVal = parseInt(value, 10);
+          if (isNaN(parsedVal)) return item;
+          if (parsedVal < 0) parsedVal = 0;
+          if (item.maxAllowed !== undefined && parsedVal > item.maxAllowed) {
+            parsedVal = item.maxAllowed;
+          }
+          return { ...item, quantity: parsedVal.toString() };
+        }
+        return { ...item, [field]: value };
+      }
+      return item;
+    }));
   };
 
   const handleProceedToReview = (e: React.FormEvent) => {
@@ -80,11 +108,38 @@ export default function ManualEntry() {
     window.scrollTo(0, 0); 
   };
 
-  const handleFinalSubmit = () => {
-    const formData = { poNumber, items };
-    console.log("FINAL SUBMISSION TO DB:", formData);
-    alert("Delivery successfully logged!");
-    router.push('/log-delivery'); 
+  // --- FULLY WIRED SUBMIT FUNCTION ---
+  const handleFinalSubmit = async () => {
+    if (isSubmitting) return; 
+    setIsSubmitting(true);
+    
+    const locationId = sessionStorage.getItem('deliveryLocation') || '';
+    const scannedData = sessionStorage.getItem('scannedSlipData');
+
+    const payload = {
+      poNumber,
+      date,
+      locationId,
+      ocrJson: scannedData ? JSON.parse(scannedData) : null,
+      items: items.map(i => ({
+        sku: i.sku, // Pass the SKU back to the server securely
+        name: i.name,
+        quantity: parseInt(i.quantity, 10) || 0,
+        specifications: i.specifications
+      }))
+    };
+
+    const res = await logDeliverySubmission(payload);
+
+    if (res.success) {
+      alert("Delivery successfully logged!");
+      sessionStorage.removeItem('scannedSlipData');
+      sessionStorage.removeItem('selectedDeliveryData');
+      router.push('/log-delivery'); 
+    } else {
+      alert(`Error logging delivery: ${res.error}`);
+      setIsSubmitting(false); 
+    }
   };
 
   return (
@@ -110,27 +165,39 @@ export default function ManualEntry() {
         {/* --- VIEW 1: THE FORM --- */}
         {!isReviewMode && (
           <form onSubmit={handleProceedToReview} className="space-y-8">
-            <div className="bg-gray-50 p-6 rounded-xl border border-gray-200">
-              <label className="block text-sm font-bold text-gray-700 mb-2">PO Number</label>
-              <input 
-                type="text" 
-                value={poNumber}
-                onChange={(e) => setPoNumber(e.target.value)}
-                readOnly={isFromPending}
-                placeholder="e.g. PO-102938"
-                // UPDATED: Dynamically change styling if locked
-                className={`w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition
-                  ${isFromPending 
-                    ? 'bg-gray-100 border-gray-200 text-gray-500 cursor-not-allowed font-medium' 
-                    : 'bg-white border-gray-300 text-gray-900'}`}
-                required
-              />
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="bg-gray-50 p-6 rounded-xl border border-gray-200">
+                <label className="block text-sm font-bold text-gray-700 mb-2">PO Number</label>
+                <input 
+                  type="text" 
+                  value={poNumber}
+                  onChange={(e) => setPoNumber(e.target.value)}
+                  readOnly={isFromPending}
+                  placeholder="e.g. PO-102938"
+                  className={`w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition
+                    ${isFromPending 
+                      ? 'bg-gray-100 border-gray-200 text-gray-500 cursor-not-allowed font-medium' 
+                      : 'bg-white border-gray-300 text-gray-900'}`}
+                  required
+                />
+              </div>
+
+              <div className="bg-gray-50 p-6 rounded-xl border border-gray-200">
+                <label className="block text-sm font-bold text-gray-700 mb-2">Delivery Date</label>
+                <input
+                  type="date"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  required
+                  className="w-full p-3 border border-gray-300 rounded-lg bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+                />
+              </div>
             </div>
 
             <div className="bg-gray-50 p-6 rounded-xl border border-gray-200">
               <div className="flex justify-between items-center mb-4">
                 <h2 className="text-xl font-bold">Items Received</h2>
-                {/* UPDATED: Only show Add Item if NOT from pending deliveries */}
                 {!isFromPending && (
                   <button 
                     type="button"
@@ -146,8 +213,10 @@ export default function ManualEntry() {
                 {items.map((item, index) => (
                   <div key={item.id} className="p-4 bg-white border border-gray-200 rounded-lg shadow-sm relative">
                     <div className="flex justify-between items-center mb-3">
-                      <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider">Item {index + 1}</h3>
-                      {/* UPDATED: Only show Remove Item if NOT from pending deliveries */}
+                      <div className="flex items-center gap-3">
+                        <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider">Item {index + 1}</h3>
+
+                      </div>
                       {!isFromPending && items.length > 1 && (
                         <button
                           type="button"
@@ -175,7 +244,6 @@ export default function ManualEntry() {
                       
                       <div className="md:col-span-3">
                         <label className="block text-xs font-semibold text-gray-600 mb-1">Quantity</label>
-                        {/* Quantity input remains editable in both modes */}
                         <div className="flex items-center border border-gray-300 rounded-md overflow-hidden bg-white focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500 transition-all">
                           <button
                             type="button"
@@ -186,9 +254,10 @@ export default function ManualEntry() {
                           </button>
                           <input 
                             type="number" 
+                            min={0}
+                            max={item.maxAllowed}
                             value={item.quantity}
                             onChange={(e) => updateItem(item.id, 'quantity', e.target.value)}
-                            // NEW: Selects the entire number when the user clicks the box
                             onFocus={(e) => e.target.select()}
                             className="w-full p-2 text-center focus:outline-none appearance-none bg-transparent font-bold text-gray-900"
                             style={{ MozAppearance: 'textfield' }}
@@ -196,7 +265,11 @@ export default function ManualEntry() {
                           />
                           <button
                             type="button"
-                            onClick={() => updateItem(item.id, 'quantity', ((parseInt(item.quantity) || 0) + 1).toString())}
+                            onClick={() => {
+                              let newVal = (parseInt(item.quantity) || 0) + 1;
+                              if (item.maxAllowed !== undefined && newVal > item.maxAllowed) newVal = item.maxAllowed;
+                              updateItem(item.id, 'quantity', newVal.toString());
+                            }}
                             className="px-3 py-2 bg-gray-50 text-gray-600 hover:bg-gray-200 border-l border-gray-300 font-bold transition flex-shrink-0"
                           >
                             +
@@ -234,17 +307,18 @@ export default function ManualEntry() {
         {isReviewMode && (
           <div className="space-y-6">
             <div className="bg-white border-2 border-gray-200 rounded-xl overflow-hidden shadow-sm">
-              <div className="bg-gray-50 p-6 border-b border-gray-200 flex justify-between items-center">
-                <div>
-                  <p className="text-sm text-gray-500 font-bold uppercase tracking-wider mb-1">Purchase Order</p>
-                  <p className="text-2xl font-bold text-gray-900">{poNumber}</p>
+              <div className="bg-gray-50 p-6 border-b border-gray-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div className="flex flex-wrap gap-8">
+                  <div>
+                    <p className="text-sm text-gray-500 font-bold uppercase tracking-wider mb-1">Purchase Order</p>
+                    <p className="text-2xl font-bold text-gray-900">{poNumber}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500 font-bold uppercase tracking-wider mb-1">Date</p>
+                    <p className="text-lg font-bold text-gray-900 mt-1">{date}</p>
+                  </div>
                 </div>
-                <button 
-                  onClick={() => setIsReviewMode(false)}
-                  className="text-blue-600 text-sm font-semibold hover:underline"
-                >
-                  Edit PO
-                </button>
+
               </div>
               
               <div className="p-0">
@@ -257,9 +331,9 @@ export default function ManualEntry() {
                     </tr>
                   </thead>
                   <tbody>
-                    {items.map((item, index) => (
-                      <tr key={index} className="border-b border-gray-50 last:border-0 hover:bg-gray-50 transition">
-                        <td className="p-4 font-bold text-gray-900">{item.quantity}</td>
+                    {items.map((item) => (
+                      <tr key={item.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50 transition">
+                        <td className="p-4 font-bold text-gray-900">{item.quantity || '0'}</td>
                         <td className="p-4 font-medium text-gray-800">{item.name}</td>
                         <td className="p-4 text-gray-500 text-sm">{item.specifications || "—"}</td>
                       </tr>
@@ -271,6 +345,7 @@ export default function ManualEntry() {
 
             <div className="flex flex-col sm:flex-row gap-4 pt-4">
               <button 
+                type="button"
                 onClick={() => setIsReviewMode(false)}
                 className="w-full sm:w-1/3 py-4 text-gray-600 font-bold bg-gray-100 rounded-xl hover:bg-gray-200 transition active:scale-[0.98]"
               >
@@ -278,10 +353,12 @@ export default function ManualEntry() {
               </button>
               
               <button 
+                type="button"
                 onClick={handleFinalSubmit}
-                className="w-full sm:w-2/3 py-4 text-white font-bold bg-green-600 rounded-xl hover:bg-green-700 transition shadow-md active:scale-[0.98]"
+                disabled={isSubmitting}
+                className="w-full sm:w-2/3 py-4 text-white font-bold bg-green-600 rounded-xl hover:bg-green-700 transition shadow-md active:scale-[0.98] disabled:bg-gray-300 disabled:cursor-not-allowed"
               >
-                Confirm & Submit Order
+                {isSubmitting ? "Logging Delivery..." : "Confirm & Log Delivery"}
               </button>
             </div>
           </div>
@@ -291,4 +368,3 @@ export default function ManualEntry() {
     </div>
   );
 }
-

@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 const STATUS_STYLES: Record<string, string> = {
   "Received":   "bg-green-100 text-green-700",
   "received":   "bg-green-100 text-green-700",
+  "completed":  "bg-green-100 text-green-700",
   "In Transit": "bg-blue-100 text-blue-700",
   "in transit": "bg-blue-100 text-blue-700",
   "Pending":    "bg-yellow-100 text-yellow-700",
@@ -34,6 +35,7 @@ export default async function PurchaseOrderDetailPage({
   const supabase = await createClient();
 
   // Deep relational fetch matching your exact schema
+  // NEW: Added fulfillment ( datetime ) to grab delivery history
   const { data: po, error } = await supabase
     .from("purchase_order")
     .select(`
@@ -43,6 +45,7 @@ export default async function PurchaseOrderDetailPage({
       pm_id,
       employee ( first_name, last_name ),
       location ( name ),
+      fulfillment ( datetime ),
       purchase_order_materials (
         total,
         remaining,
@@ -73,6 +76,16 @@ export default async function PurchaseOrderDetailPage({
     uploaderName = `${empData.first_name || ""} ${empData.last_name || ""}`.trim();
   } else if (po.pm_id) {
     uploaderName = `Project Manager (${po.pm_id.substring(0, 8)})`; // Fallback if name is missing
+  }
+
+  // NEW: Calculate the most recent fulfillment date if deliveries exist
+  let latestFulfillmentDate = null;
+  if (po.fulfillment && po.fulfillment.length > 0) {
+    // Sort descending so the newest date is always at index [0]
+    const sortedFulfillments = po.fulfillment.sort((a: any, b: any) => 
+      new Date(b.datetime).getTime() - new Date(a.datetime).getTime()
+    );
+    latestFulfillmentDate = sortedFulfillments[0].datetime;
   }
 
   // Safely map the line items
@@ -116,6 +129,14 @@ export default async function PurchaseOrderDetailPage({
                   <div className="text-sm text-gray-800">
                     <span className="font-bold text-gray-500 uppercase text-xs tracking-wider mr-2">Order Date:</span>
                     <span className="font-medium">{formatDate(po.date)}</span>
+                  </div>
+                )}
+                
+                {/* NEW: Fulfillment Date Badge */}
+                {latestFulfillmentDate && (
+                  <div className="text-sm text-green-800 bg-green-100/80 px-2 py-0.5 rounded border border-green-300 flex items-center">
+                    <span className="font-bold text-green-700 uppercase text-xs tracking-wider mr-2">Fulfilled:</span>
+                    <span className="font-bold">{formatDate(latestFulfillmentDate)}</span>
                   </div>
                 )}
               </div>

@@ -49,7 +49,8 @@ export const getPurchaseOrderColumns = (
             const status = row.original.status || "Pending";
             
             let bgClass = "bg-gray-100 text-gray-600";
-            if (status === "Received") bgClass = "bg-green-100 text-green-700";
+            // FIXED: Added "completed" and "Completed" to the green badge logic
+            if (status === "Received" || status === "completed" || status === "Completed") bgClass = "bg-green-100 text-green-700";
             if (status === "In Transit") bgClass = "bg-blue-100 text-blue-700";
             if (status === "Pending" || status === "pending") bgClass = "bg-yellow-100 text-yellow-700";
 
