@@ -132,19 +132,7 @@ export default function NewMaterialsRequest() {
       <div className="w-full max-w-3xl bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
         <form onSubmit={handleSubmit} className="space-y-8">
           
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* DATE */}
-            <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase mb-2">Date *</label>
-              <input
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                required
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* SOURCE (CUSTOM DROPDOWN) */}
             <div className="relative">
               <label className="block text-xs font-bold text-slate-700 uppercase mb-2">From (Source) *</label>

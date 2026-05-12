@@ -18,14 +18,6 @@ export const materialsRequestColumns: ColumnDef<MaterialsRequestItem>[] = [
         cell: ({ row }) => <span className="font-bold text-gray-900">{row.original.request_id}</span>
     },
     {
-        accessorKey: 'from_name', // Tell the table to look for the new stitched name
-        header: 'From',
-    },
-    {
-        accessorKey: 'to_name', // Tell the table to look for the new stitched name
-        header: 'To',
-    },
-    {
         accessorKey: 'status',
         header: 'Status',
         cell: ({ row }) => {

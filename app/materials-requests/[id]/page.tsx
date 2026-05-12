@@ -82,15 +82,6 @@ export default async function RequestDetailsPage({
                   </div>
                 )}
               </div>
-
-              {/* Bottom row: Clean Transfer Route */}
-              <div className="pt-3 border-t border-blue-200/60 flex items-center gap-3 text-sm">
-                <span className="font-bold text-gray-500 uppercase text-xs tracking-wider">Transfer:</span>
-                <span className="font-bold text-black">{fromLocation}</span>
-                <span className="text-gray-400 font-bold">&rarr;</span>
-                <span className="font-bold text-black">{toLocation}</span>
-              </div>
-
             </div>
           </div>
 
@@ -110,6 +101,8 @@ export default async function RequestDetailsPage({
               <tr>
                 <th className="p-3 sm:p-4 border-b sticky left-0 z-20 bg-blue-200">#</th>
                 <th className="p-3 sm:p-4 border-b">Material</th>
+                <th className="p-3 sm:p-4 border-b">Source Location</th>
+                <th className="p-3 sm:p-4 border-b">Destination Location</th>
                 <th className="p-3 sm:p-4 border-b text-center">Total Qty</th>
                 <th className="p-3 sm:p-4 border-b text-center">Remaining</th>
               </tr>
@@ -131,6 +124,8 @@ export default async function RequestDetailsPage({
                         {item.description} ({item.sku})
                       </div>
                     </td>
+                    <td className="p-3 sm:p-4 text-center font-mono text-lg font-bold">{item.from_name}</td>
+                    <td className="p-3 sm:p-4 text-center font-mono text-lg font-bold">{item.to_name}</td>
                     <td className="p-3 sm:p-4 text-center font-mono text-lg font-bold">{item.quantity}</td>
                     <td className="p-3 sm:p-4 text-center font-mono text-lg font-bold text-blue-600">
                       {item.remaining ?? item.quantity}
