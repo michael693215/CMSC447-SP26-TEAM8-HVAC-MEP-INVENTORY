@@ -50,7 +50,7 @@ export const employeeColumns: ColumnDef<Employee>[] = [
                     <DropdownMenuContent align="end">
                         <DropdownMenuLabel>Actions</DropdownMenuLabel>
                         { role == 'administrator' && <DropdownMenuItem asChild>
-                            <Link href={ `user-pages/${ row.original.id }` }>
+                            <Link href={ `/user-pages/${ row.original.id }` }>
                                 Edit
                             </Link>
                         </DropdownMenuItem> }

@@ -1,211 +1,105 @@
 "use client";
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+// Import the action you already made for the materials-request page
+import { getLocations } from '@/lib/actions';
 
-import { useState, useEffect } from "react";
-import Link from "next/link";
-import { getInventoryList } from "./actions";
+export default function LogDeliveryHub() {
+  const router = useRouter();
+  const [location, setLocation] = useState('');
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  // State to hold real locations from the DB
+  const [dbLocations, setDbLocations] = useState<any[]>([]);
 
-type SortKey = "name" | "category" | "qty" | "status" | "deliveries";
-type SortDir = "asc" | "desc";
-type StatusFilter = "All" | "In Stock" | "Low Stock" | "Out of Stock";
-
-const STATUS_ORDER = { "Out of Stock": 0, "Low Stock": 1, "In Stock": 2 };
-
-function SortArrow({ active, dir }: { active: boolean; dir: SortDir }) {
-  if (!active) return (
-    <svg xmlns="http://www.w3.org/2000/svg" className="inline w-3 h-3 ml-1 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
-      <path d="M5 12l5-5 5 5H5z" />
-    </svg>
-  );
-  return dir === "asc" ? (
-    <svg xmlns="http://www.w3.org/2000/svg" className="inline w-3 h-3 ml-1" viewBox="0 0 20 20" fill="currentColor">
-      <path d="M5 12l5-5 5 5H5z" />
-    </svg>
-  ) : (
-    <svg xmlns="http://www.w3.org/2000/svg" className="inline w-3 h-3 ml-1" viewBox="0 0 20 20" fill="currentColor">
-      <path d="M15 8l-5 5-5-5h10z" />
-    </svg>
-  );
-}
-
-export default function InventoryPage() {
-  const [products, setProducts] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-
-  const [searchTerm, setSearchTerm] = useState("");
-  const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: "name", dir: "asc" });
-  const [categoryFilter, setCategoryFilter] = useState("All");
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("All");
-
-  // Load live database inventory on mount
+  // Fetch real locations on mount
   useEffect(() => {
-    async function loadData() {
-      const data = await getInventoryList();
-      setProducts(data);
-      setIsLoading(false);
+    async function load() {
+      const data = await getLocations();
+      setDbLocations(data);
     }
-    loadData();
+    load();
   }, []);
 
-  const categories = ["All", ...Array.from(new Set(products.map((p) => p.category))).sort()];
-
-  function toggleSort(key: SortKey) {
-    setSort((prev) =>
-      prev.key === key ? { key, dir: prev.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" }
-    );
-  }
-
-  const filtered = products.filter((item) => {
-    const matchesSearch =
-      item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.sku.toLowerCase().includes(searchTerm.toLowerCase());
-      
-    const matchesCategory = categoryFilter === "All" || item.category === categoryFilter;
-    const matchesStatus = statusFilter === "All" || item.status === statusFilter;
-    return matchesSearch && matchesCategory && matchesStatus;
-  });
-
-  const sorted = [...filtered].sort((a, b) => {
-    let cmp = 0;
-    if (sort.key === "qty") cmp = a.qty - b.qty;
-    else if (sort.key === "deliveries") cmp = (a.deliveryIds?.length || 0) - (b.deliveryIds?.length || 0);
-    else if (sort.key === "status") cmp = STATUS_ORDER[a.status as keyof typeof STATUS_ORDER] - STATUS_ORDER[b.status as keyof typeof STATUS_ORDER];
-    else cmp = String(a[sort.key]).localeCompare(String(b[sort.key]));
-    return sort.dir === "asc" ? cmp : -cmp;
-  });
-
-  function Th({ col, label, center, sticky }: { col: SortKey; label: string; center?: boolean; sticky?: boolean }) {
-    return (
-      <th
-        className={`p-3 sm:p-4 border-b cursor-pointer select-none whitespace-nowrap ${center ? "text-center" : ""} ${
-          sticky 
-            ? "static sm:sticky sm:left-0 sm:z-20 bg-blue-200 hover:bg-blue-300 sm:shadow-[1px_0_0_#e5e7eb]" 
-            : "hover:bg-black/5"
-        }`}
-        onClick={() => toggleSort(col)}
-      >
-        {label}
-        <SortArrow active={sort.key === col} dir={sort.dir} />
-      </th>
-    );
-  }
-
   return (
-    <div className="min-h-screen p-4 sm:p-8 text-black">
-      <div className="max-w-6xl mx-auto">
-        <Link href="/" className="text-blue-600 hover:underline mb-4 inline-block font-medium">
-          &larr; Back to Dashboard
-        </Link>
+    <div className="min-h-screen p-8 text-black bg-white">
+      <div className="max-w-3xl mx-auto">
+        
+        <button 
+          onClick={() => router.push('/')} 
+          className="text-blue-600 hover:underline mb-6 inline-block font-medium"
+        >
+          ← Back to Dashboard
+        </button>
 
-        <div className="flex flex-wrap justify-between items-center gap-3 mb-6">
-          <h1 className="text-2xl sm:text-3xl font-bold uppercase tracking-tight">Inventory Management</h1>
-        </div>
+        <header className="mb-8">
+          <h1 className="text-3xl font-bold uppercase tracking-tight">View Inventory</h1>
+          <p className="text-gray-500 mt-2 text-lg">Select your location to continue.</p>
+        </header>
 
-        {/* Search + filters */}
-        <div className="bg-white p-3 sm:p-4 rounded-t-lg border-x border-t border-gray-200 flex flex-wrap gap-3 items-end">
-          <div className="relative flex-1 min-w-[180px]">
-            <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-gray-400">
-              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
-              </svg>
-            </span>
-            <input
-              type="text"
-              placeholder="Search by part name, SKU, or description..."
-              className="input-themed block w-full pl-10 pr-3 py-2 text-sm border border-gray-300 rounded-md"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <label className="text-xs font-bold uppercase tracking-wider text-gray-500 whitespace-nowrap">Category</label>
-            <select
-              value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value)}
-              className="input-themed text-sm px-2 py-1.5 border border-gray-300 rounded-md"
-            >
-              {categories.map((c) => <option key={c} value={c as string}>{c as string}</option>)}
-            </select>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <label className="text-xs font-bold uppercase tracking-wider text-gray-500 whitespace-nowrap">Status</label>
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-              className="input-themed text-sm px-2 py-1.5 border border-gray-300 rounded-md"
-            >
-              <option value="All">All</option>
-              <option value="In Stock">In Stock</option>
-              <option value="Low Stock">Low Stock</option>
-              <option value="Out of Stock">Out of Stock</option>
-            </select>
-          </div>
-        </div>
+        <div className="space-y-8">
+          
+          <div className="bg-gray-50 p-6 rounded-xl border border-gray-200 shadow-sm">
+            <label className="block text-sm font-bold text-gray-700 mb-2 uppercase tracking-wide">
+              Current Location
+            </label>
+            <div className="relative w-full">
+              <button
+                type="button"
+                onClick={() => setDropdownOpen(!dropdownOpen)}
+                className="w-full p-4 border border-gray-300 rounded-lg bg-white font-medium text-lg text-left focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm flex justify-between items-center"
+              >
+                <span className={`truncate ${!location ? 'text-gray-400' : 'text-gray-900'}`}>
+                  {location 
+                    ? dbLocations.find(l => l.id === location)?.name 
+                    : 'Select a location...'}
+                </span>
+                <svg className={`h-5 w-5 text-gray-500 transition-transform ${dropdownOpen ? 'rotate-180' : ''}`} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                  <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/>
+                </svg>
+              </button>
 
-        {/* Table */}
-        <div className="bg-white shadow-md rounded-b-lg overflow-x-auto border border-gray-200">
-          <table className="w-full min-w-[600px] text-left border-collapse">
-            <thead className="table-header-accent bg-gray-50 text-gray-600">
-              <tr>
-                <Th col="name" label="Product" sticky />
-                <th className="p-3 sm:p-4 border-b">Description</th>
-                <Th col="category" label="Category" />
-                <Th col="qty" label="Qty" center />
-                <Th col="status" label="Status" />
-                <Th col="deliveries" label="Deliveries" center />
-              </tr>
-            </thead>
-            <tbody>
-              {isLoading ? (
-                 <tr>
-                 <td colSpan={6} className="p-10 text-center text-gray-500 font-medium">
-                   Loading real-time inventory...
-                 </td>
-               </tr>
-              ) : sorted.length > 0 ? (
-                sorted.map((item) => (
-                  <tr key={item.id} className="hover:bg-blue-50 transition-colors border-b border-gray-100 cursor-pointer">
-                    <td className="p-3 sm:p-4 border-b border-gray-100 font-bold whitespace-nowrap static sm:sticky sm:left-0 sm:z-10 bg-white sm:shadow-[1px_0_0_#e5e7eb]">
-                      <Link 
-                        href={`/inventory/${item.id}`} 
-                        // UPDATED: Expanded the max-widths to allow longer names before truncation!
-                        className="hover:underline text-black block truncate max-w-[180px] sm:max-w-[260px] lg:max-w-[350px]"
-                        title={item.name} 
-                      >
-                        {item.name}
-                      </Link>
-                    </td>
-                    <td className="p-3 sm:p-4 text-gray-600 italic text-sm">{item.description}</td>
-                    <td className="p-3 sm:p-4 text-sm text-gray-700">{item.category}</td>
-                    <td className="p-3 sm:p-4 text-center font-mono text-lg">{item.qty}</td>
-                    <td className="p-3 sm:p-4">
-                      <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase whitespace-nowrap ${
-                        item.status === "Low Stock" ? "bg-red-100 text-red-700"
-                        : item.status === "Out of Stock" ? "bg-gray-200 text-gray-600"
-                        : "bg-green-100 text-green-700"
-                      }`}>
-                        {item.status}
-                      </span>
-                    </td>
-                    <td className="p-3 sm:p-4 text-center">
-                      <Link
-                        href={`/inventory/${item.id}`}
-                        className="text-xs bg-blue-200 hover:bg-blue-700 hover:text-white px-3 py-1.5 rounded-md transition font-bold whitespace-nowrap"
-                      >
-                        View ({item.deliveryIds?.length || 0})
-                      </Link>
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={6} className="p-10 text-center text-gray-500 italic">
-                    No products match the current filters.
-                  </td>
-                </tr>
+              {dropdownOpen && (
+                <div className="absolute z-10 w-full mt-2 bg-white border border-gray-200 rounded-lg shadow-xl overflow-hidden max-h-60 overflow-y-auto">
+                  {dbLocations.map((loc) => (
+                    <button
+                      key={loc.id}
+                      onClick={() => { setLocation(loc.id); setDropdownOpen(false); }}
+                      className={`w-full text-left px-4 py-4 text-lg hover:bg-blue-50 transition ${location === loc.id ? 'bg-blue-100 font-bold text-blue-800' : 'text-gray-700'}`}
+                    >
+                      {loc.name}
+                    </button>
+                  ))}
+                  {dbLocations.length === 0 && (
+                    <div className="p-4 text-gray-400 italic">Loading locations...</div>
+                  )}
+                </div>
               )}
-            </tbody>
-          </table>
+            </div>
+            
+            {!location && (
+              <p className="mt-3 text-red-500 text-sm font-medium">Please select a location to continue.</p>
+            )}
+          </div>
+          
+          <div className="grid grid-cols-1 gap-6">
+            <button 
+              disabled={!location}
+              onClick={ () => router.push(`/inventory/${location}`) }
+              className={`text-left group border-2 rounded-xl p-6 transition duration-200 
+                ${!location 
+                  ? 'bg-gray-50 border-gray-200 opacity-50 cursor-not-allowed' 
+                  : 'bg-white border-gray-200 hover:border-blue-500 hover:shadow-md cursor-pointer active:scale-[0.98]'}`}
+            >
+              <div className="flex items-center justify-between mb-2">
+                <h2 className="w-full text-xl font-bold text-center text-gray-900 group-hover:text-blue-600 transition">
+                 Continue 
+                </h2>
+                <span className={`transition transform translate-x-[-10px] ${!location ? 'hidden' : 'text-blue-500 opacity-0 group-hover:opacity-100 group-hover:translate-x-0'}`}>
+                  →
+                </span>
+              </div>
+            </button>
+          </div>
         </div>
       </div>
     </div>

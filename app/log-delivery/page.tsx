@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 // Import the action you already made for the materials-request page
-import { getLocations } from '../materials-requests/actions';
+import { getLocations } from '@/lib/actions';
 
 export default function LogDeliveryHub() {
   const router = useRouter();

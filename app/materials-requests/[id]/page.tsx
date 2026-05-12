@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getMaterialRequestById } from "../actions";
+import { getMaterialRequestById } from "@/lib/actions";
 
 const STATUS_STYLES: Record<string, string> = {
   "Fulfilled": "bg-green-100 text-green-700",

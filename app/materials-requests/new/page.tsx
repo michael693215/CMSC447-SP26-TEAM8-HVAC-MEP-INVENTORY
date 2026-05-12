@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { getLocations, getInventoryByLocation, createMaterialRequest } from "../actions";
+import { getLocations, getInventoryByLocation, createMaterialRequest } from "@/lib/actions";
 
 interface InventoryItem {
   sku: string;
